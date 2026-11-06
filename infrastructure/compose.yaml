@@ -1,0 +1,67 @@
+name: coding-ai-assistant
+x-api: &api
+  build:
+    context: ..
+    dockerfile: infrastructure/docker/api.Dockerfile
+  env_file: ../.env
+  environment:
+    APP_KEY: ${APP_KEY:?Set APP_KEY in .env}
+    DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  networks: [backend]
+  volumes: [api-storage:/var/www/html/storage]
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+services:
+  api:
+    <<: *api
+    healthcheck:
+      test: [CMD, php, -r, "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  worker:
+    <<: *api
+    command: [php, artisan, queue:work, --tries=3, --timeout=90]
+  scheduler:
+    <<: *api
+    command: [php, artisan, schedule:work]
+  web:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/web.Dockerfile
+    ports: ["127.0.0.1:${APP_PORT:-8080}:80"]
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [edge, backend]
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-coding_assistant}
+      POSTGRES_USER: ${DB_USERNAME:-coding_assistant}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7.4.2-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis-data:/data]
+    networks: [backend]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+networks:
+  edge:
+  backend:
+    internal: true
+volumes:
+  postgres-data:
+  redis-data:
+  api-storage:
