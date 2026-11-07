@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Message;
 use App\Models\MessageEvent;
+use App\Models\ModelCall;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -23,6 +24,7 @@ class RecoverChatResponses extends Command
                     if (! $message || ! in_array($message->status, ['queued', 'streaming'], true) || $message->updated_at->gte(now()->subSeconds(config('chat.stale_seconds')))) {
                         return;
                     }
+                    ModelCall::where('source_type', 'message')->where('source_id', $message->id)->where('attempt', $message->attempt)->where('status', 'reserved')->update(['status' => 'uncertain', 'error_code' => 'worker_interrupted']);
                     $message->update(['status' => 'failed', 'error_code' => 'worker_interrupted']);
                     MessageEvent::create(['message_id' => $message->id, 'attempt' => $message->attempt, 'type' => 'failed', 'payload' => ['code' => 'worker_interrupted', 'message' => 'Response interrupted. You may retry explicitly.']]);
                     $count++;

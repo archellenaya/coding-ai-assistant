@@ -703,7 +703,7 @@
     "/api/v1/models": {
       "get": {
         "summary": "Configured cloud model catalog",
-        "description": "No credentials are exposed. Empty catalog when no model is configured; available false when key absent.",
+        "description": "Backward-compatible configured public catalog only; available indicates configuration, not a live connection. Use /providers for metadata availability probes.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1178,7 +1178,7 @@
       },
       "post": {
         "summary": "Persist prompt and queue assistant response",
-        "description": "Same UUID and same input return original assistant without another job. Different input with same key returns 409. Requires cloud permission and configured model, including worker rechecks.",
+        "description": "Optional legacy model override must match provider mode. Otherwise use saved preferences; snapshot mode/model/consent/candidate set for queued work. One active response and UUID idempotency. ContextBuilder selects whole history/source/memory within model limits; optional exact compatible private solution lookup precedes inference. Financial reservation precedes every real generation attempt. No automatic replay after inference begins.",
         "responses": {
           "202": {
             "description": "Successful response",
@@ -1247,7 +1247,6 @@
                 "type": "object",
                 "required": [
                   "content",
-                  "model",
                   "idempotency_key"
                 ],
                 "properties": {
@@ -1256,12 +1255,18 @@
                     "maxLength": 12000
                   },
                   "model": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "maxLength": 150
                   },
                   "idempotency_key": {
                     "type": "string",
                     "format": "uuid"
+                  },
+                  "solution_context": {
+                    "$ref": "#/components/schemas/SolutionLookup"
                   }
                 }
               }
@@ -2822,6 +2827,724 @@
           }
         }
       }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "summary": "Probe configured providers/models",
+        "description": "Authorized metadata-only OpenAI GET model and private Ollama POST show probes, bounded timeouts, no private project text or generation. Presence does not prove billing/quota; server credentials/endpoints are never returned. Registry contains server-configured public metadata only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AIModel"
+                      }
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation}/preferences": {
+      "get": {
+        "summary": "Read saved conversation provider preferences",
+        "description": "",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProviderPreferences"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Save provider/model and fallback consent",
+        "description": "Creator plus both memberships. Explicit modes never change provider. Auto honors local-only project policy and availability-only fallback consent. Pending request snapshots remain independent of later preference edits.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProviderPreferences"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          },
+          "419": {
+            "description": "CSRF token/session required"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider_mode": {
+                    "type": "string",
+                    "enum": [
+                      "ollama",
+                      "openai",
+                      "auto"
+                    ]
+                  },
+                  "preferred_model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 150
+                  },
+                  "allow_fallback": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "provider_mode",
+                  "preferred_model",
+                  "allow_fallback"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project}/solutions": {
+      "get": {
+        "summary": "List own manually attested solutions",
+        "description": "20/page. Cache contents/evidence remain creator-private, unlike shared repository source.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string",
+              "maxLength": 180
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Solution"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      },
+      "post": {
+        "summary": "Record a solution with explicit human test evidence",
+        "description": "Requires project administration rights. Server records actor/time and repository snapshot digest. This is manually attested evidence, not independently executed verification; AI output is never automatically promoted. General verification execution/history remains Phase 6.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Solution"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          },
+          "419": {
+            "description": "CSRF token/session required"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error_signature": {
+                    "type": "string",
+                    "maxLength": 180
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 12000
+                  },
+                  "compatibility": {
+                    "$ref": "#/components/schemas/SolutionCompatibility"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "exit_code": {
+                        "type": "integer",
+                        "enum": [
+                          0
+                        ]
+                      },
+                      "result": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "attestation": {
+                        "type": "boolean",
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "command",
+                      "exit_code",
+                      "result",
+                      "attestation"
+                    ]
+                  }
+                },
+                "required": [
+                  "error_signature",
+                  "content",
+                  "compatibility",
+                  "evidence"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/solutions/{solution}/invalidate": {
+      "post": {
+        "summary": "Invalidate own cached solution",
+        "description": "Creator plus project memberships. Invalidation and index-digest changes make cache entries ineligible.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solution",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Solution"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          },
+          "419": {
+            "description": "CSRF token/session required"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project}/usage": {
+      "get": {
+        "summary": "Read own calls and authorized daily usage aggregates",
+        "description": "UTC daily totals by provider/model with input/output/cached tokens, latency and estimated API cost; uncertain usage retains reservations. Owners may see project aggregates, members only their own; individual call metadata stays private. Query page paginates calls. Micro-USD estimates are not provider invoices; local hardware costs are separate.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ModelCall"
+                          }
+                        },
+                        "current_page": {
+                          "type": "integer"
+                        },
+                        "last_page": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "per_page": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "totals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "current_user"
+                      ]
+                    },
+                    "budgets_micro_usd": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "integer"
+                        },
+                        "project": {
+                          "type": "integer"
+                        },
+                        "organization": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "cost_note": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "summary": "Read own calls across projects",
+        "description": "Private per-user usage, including financial metadata retained after project deletion to prevent budget-reset bypass. No prompt/response content is stored in the ledger.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ModelCall"
+                          }
+                        },
+                        "current_page": {
+                          "type": "integer"
+                        },
+                        "last_page": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "per_page": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "totals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "daily_budget_micro_usd": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/usage": {
+      "get": {
+        "summary": "Read organization daily usage aggregates",
+        "description": "Organization owner only. Financial aggregates, no other user conversation content.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "daily_budget_micro_usd": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Project/organization/creator policy denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Archived project or incompatible state"
+          },
+          "422": {
+            "description": "Validation, unknown/mismatched/unavailable model or evidence failure"
+          },
+          "429": {
+            "description": "Rate limited; provider probes/preferences 10/minute/user"
+          },
+          "503": {
+            "description": "Provider/tokenizer/model configuration unavailable, insufficient context or estimated spending limit; safe domain code returned"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2999,6 +3722,24 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "provider_mode": {
+            "type": "string",
+            "enum": [
+              "ollama",
+              "openai",
+              "auto"
+            ]
+          },
+          "preferred_model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 150
+          },
+          "allow_fallback": {
+            "type": "boolean"
           }
         }
       },
@@ -3125,6 +3866,28 @@
             "items": {
               "$ref": "#/components/schemas/CodeSource"
             }
+          },
+          "routing": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "context_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -3166,6 +3929,34 @@
               "number",
               "null"
             ]
+          },
+          "registry_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tokenizer": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "availability_kind": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "quality": {
+            "type": "number"
           }
         }
       },
@@ -3356,6 +4147,15 @@
           "error_code": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "routing": {
+            "type": [
+              "object",
               "null"
             ]
           }
@@ -3623,6 +4423,297 @@
           },
           "language": {
             "type": "string"
+          }
+        }
+      },
+      "ProviderPreferences": {
+        "type": "object",
+        "properties": {
+          "provider_mode": {
+            "type": "string",
+            "enum": [
+              "ollama",
+              "openai",
+              "auto"
+            ]
+          },
+          "preferred_model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 150
+          },
+          "allow_fallback": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider_mode",
+          "preferred_model",
+          "allow_fallback"
+        ]
+      },
+      "SolutionCompatibility": {
+        "type": "object",
+        "properties": {
+          "framework": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "framework_version": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "dependencies": {
+            "oneOf": [
+              {
+                "type": "object",
+                "maxProperties": 100,
+                "propertyNames": {
+                  "pattern": "^[A-Za-z0-9@_.:/-]{1,150}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 100
+                }
+              },
+              {
+                "type": "array",
+                "maxItems": 0
+              }
+            ]
+          },
+          "environment": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "git_commit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{40,64}$"
+          }
+        },
+        "required": [
+          "framework",
+          "framework_version",
+          "dependencies",
+          "environment",
+          "git_commit"
+        ]
+      },
+      "SolutionLookup": {
+        "type": "object",
+        "properties": {
+          "error_signature": {
+            "type": "string",
+            "maxLength": 180
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/SolutionCompatibility"
+          }
+        },
+        "required": [
+          "error_signature",
+          "compatibility"
+        ]
+      },
+      "Solution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "error_signature": {
+            "type": "string",
+            "maxLength": 180
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 12000
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/SolutionCompatibility"
+          },
+          "compatibility_hash": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "invalidated"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "ModelCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "organization_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "message",
+              "summary"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "completed",
+              "failed",
+              "uncertain"
+            ]
+          },
+          "reserved_micro_usd": {
+            "type": "integer"
+          },
+          "estimated_micro_usd": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "input_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "output_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cached_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cache_hit": {
+            "type": "boolean"
+          },
+          "pricing": {
+            "type": "object"
+          },
+          "context_metrics": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ContextMetrics": {
+        "type": "object",
+        "properties": {
+          "input_tokens": {
+            "type": "integer"
+          },
+          "output_reserved": {
+            "type": "integer"
+          },
+          "safety_reserved": {
+            "type": "integer"
+          },
+          "context_window": {
+            "type": "integer"
+          },
+          "tokenizer": {
+            "type": "string"
+          },
+          "count_kind": {
+            "type": "string"
+          },
+          "selected_history_pairs": {
+            "type": "integer"
+          },
+          "available_history_pairs": {
+            "type": "integer"
+          },
+          "raw_input_tokens": {
+            "type": "integer"
+          },
+          "reduction_fraction": {
+            "type": "number"
+          },
+          "summary_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       }

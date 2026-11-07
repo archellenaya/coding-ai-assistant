@@ -7,11 +7,12 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageEvent;
 use App\Models\User;
+use App\Services\AI\ModelRouter;
 use Illuminate\Support\Facades\DB;
 
 class ChatService
 {
-    public function __construct(private ChatAccess $access) {}
+    public function __construct(private ChatAccess $access, private ModelRouter $router) {}
 
     public function send(Conversation $conversation, User $user, array $data): Message
     {
@@ -20,18 +21,21 @@ class ChatService
             $this->access->assertCanSend($conversation, $user);
             $existing = $conversation->messages()->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
-                abort_unless($existing->content === $data['content'] && $data['model'] === $conversation->messages()->where('reply_to_id', $existing->id)->value('model'), 409, 'Idempotency key already used for different input.');
+                $reply = $conversation->messages()->where('reply_to_id', $existing->id)->firstOrFail();
+                abort_unless($existing->content === $data['content'] && ($reply->request_hash ? hash_equals($reply->request_hash, $this->requestHash($data)) : (($data['model'] ?? null) === $reply->model)), 409, 'Idempotency key already used for different input.');
 
                 return $conversation->messages()->where('reply_to_id', $existing->id)->firstOrFail();
             }
-            abort_unless($data['model'] === config('chat.model'), 422, 'Unsupported model.');
+            $selection = $this->router->select($conversation, $user, $data['content'], $data['model'] ?? null);
+            if (isset($data['solution_context'])) {
+                $selection['routing']['solution_context'] = $data['solution_context'];
+            }
             $this->assertIdle($conversation);
             abort_if($conversation->messages()->where('role', 'user')->count() >= config('chat.max_turns'), 422, 'Conversation limit reached; start a new conversation.');
-            $history = $this->history($conversation);
-            abort_if(mb_strlen($data['content']) + array_sum(array_map(fn ($m) => mb_strlen($m['content']), $history)) > config('chat.max_input_chars'), 422, 'Conversation exceeds the input limit; start a new conversation.');
+            abort_if(mb_strlen($data['content']) > config('chat.max_input_chars'), 422, 'Prompt exceeds the input limit; no text was truncated.');
             $sequence = ($conversation->messages()->max('sequence') ?? 0) + 1;
             $prompt = $conversation->messages()->create(['sequence' => $sequence, 'role' => 'user', 'status' => 'completed', 'content' => $data['content'], 'idempotency_key' => $data['idempotency_key']]);
-            $assistant = $conversation->messages()->create(['sequence' => $sequence + 1, 'role' => 'assistant', 'status' => 'queued', 'content' => '', 'reply_to_id' => $prompt->id, 'provider' => 'openai', 'model' => $data['model']]);
+            $assistant = $conversation->messages()->create(['sequence' => $sequence + 1, 'role' => 'assistant', 'status' => 'queued', 'content' => '', 'reply_to_id' => $prompt->id, 'provider' => $selection['model']['provider'], 'model' => $selection['model']['id'], 'routing' => $selection['routing'], 'request_hash' => $this->requestHash($data)]);
             $conversation->touch();
             $this->enqueue($assistant);
 
@@ -52,13 +56,24 @@ class ChatService
             abort_unless($message->attempt === $attempt && $message->status === 'failed', 409, 'Response is not retryable.');
             abort_if($message->attempt >= config('chat.max_attempts'), 422, 'Retry limit reached.');
             abort_if($message->sequence !== $conversation->messages()->max('sequence'), 409, 'Only the latest response can be retried.');
-            abort_unless($message->model === config('chat.model'), 422, 'Original model is no longer configured.');
+            $selection = $this->router->select($conversation, $user, $conversation->messages()->whereKey($message->reply_to_id)->firstOrFail()->content, null, $message->routing);
+            if (isset($message->routing['solution_context'])) {
+                $selection['routing']['solution_context'] = $message->routing['solution_context'];
+            }
+            $message->provider = $selection['model']['provider'];
+            $message->model = $selection['model']['id'];
+            $message->routing = $selection['routing'];
             $this->assertIdle($conversation);
             $message->update(['status' => 'queued', 'content' => '', 'attempt' => $message->attempt + 1, 'usage' => null, 'provider_response_id' => null, 'error_code' => null, 'started_at' => null]);
             $this->enqueue($message);
 
             return $message->fresh();
         });
+    }
+
+    private function requestHash(array $data): string
+    {
+        return hash('sha256', json_encode([$data['content'], $data['model'] ?? null, $data['solution_context'] ?? null], JSON_THROW_ON_ERROR));
     }
 
     public function history(Conversation $conversation): array

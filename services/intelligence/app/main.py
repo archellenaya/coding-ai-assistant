@@ -116,7 +116,7 @@ def create_app(engine_factory=Engine, token: str | None = None):
 
     @app.exception_handler(RequestValidationError)
     async def invalid_input(_request, _error):
-        return JSONResponse(status_code=422, content={'detail': 'Invalid embedding request'})
+        return JSONResponse(status_code=422, content={'detail': 'Invalid intelligence request'})
 
     def authenticate(authorization: str | None = Header(default=None)):
         secret = token if token is not None else os.getenv('INTELLIGENCE_TOKEN', '')
@@ -150,6 +150,24 @@ def create_app(engine_factory=Engine, token: str | None = None):
             return snapshot(data.path, project_id=str(data.project_id))
         except (ValueError, OSError, UnicodeError):
             raise HTTPException(422, 'Repository unavailable, unsafe, or exceeds indexing limits') from None
+
+    class TokenInput(BaseModel):
+        encoding: str = Field(pattern=r'^(cl100k_base|o200k_base|utf8-bytes)$')
+        texts: list[str] = Field(min_length=1, max_length=64)
+
+        @model_validator(mode='after')
+        def total(self):
+            if sum(map(len, self.texts)) > 250000:
+                raise ValueError('Token counting input limit')
+            return self
+
+    @app.post('/v1/token-count', dependencies=[Depends(authenticate)])
+    def token_count(data: TokenInput):
+        from .token_count import count_texts
+        try:
+            return {'counts': count_texts(data.texts, data.encoding), 'encoding': data.encoding}
+        except Exception:
+            raise HTTPException(503, 'Local tokenization unavailable') from None
 
     return app
 

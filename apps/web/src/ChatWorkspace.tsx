@@ -4,14 +4,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 import { MessageContent } from "./MessageContent";
+import { ProviderPreferences } from "./ProviderPreferences";
+import type { Preferences, ProviderModel } from "./ProviderPreferences";
 import { SummaryPanel } from "./SummaryPanel";
 
-type Conversation = { id: string; title: string };
+type Conversation = { id: string; title: string } & Preferences;
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   status: "queued" | "streaming" | "completed" | "failed";
+  provider?: string;
+  routing?: { decision?: string };
+  context_metrics?: { input_tokens?: number; reduction_fraction?: number };
   model: string | null;
   attempt: number;
   error_code: string | null;
@@ -25,7 +30,7 @@ type Message = {
   usage: { input_tokens?: number; output_tokens?: number } | null;
 };
 type Page<T> = { data: T[]; last_page: number };
-type Model = { id: string; provider: string; available: boolean };
+type Model = ProviderModel;
 type Project = {
   id: string;
   name: string;
@@ -76,6 +81,7 @@ function ProjectChat({ projectId }: { projectId: string }) {
     <>
       <Link to="/projects">← Projects</Link>
       <Link to={`/projects/${projectId}/memories`}>Memory Explorer</Link>
+      <Link to={`/projects/${projectId}/optimization`}>Solutions & usage</Link>
       <h1>AI Chat · {project.data?.data.name ?? "Project"}</h1>
       <p>
         Conversations are private to your account. Responses are AI suggestions
@@ -83,8 +89,9 @@ function ProjectChat({ projectId }: { projectId: string }) {
       </p>
       {project.data && !project.data.data.cloud_processing_allowed && (
         <p role="status">
-          Cloud processing is disabled. Enable it in project settings before
-          sending code to the cloud provider.
+          Cloud processing is disabled. Local Ollama remains available when
+          configured. Enable cloud processing only if you permit sending code to
+          OpenAI.
         </p>
       )}
       {(project.error || conversations.error || create.error) && (
@@ -173,7 +180,9 @@ function ConversationChat({
 }) {
   const client = useQueryClient();
   const [content, setContent] = useState("");
-  const [model, setModel] = useState("");
+  const [solutionId, setSolutionId] = useState("");
+  const [solutionFilter, setSolutionFilter] = useState("");
+  const [solutionSearch, setSolutionSearch] = useState("");
   const [pending, setPending] = useState<Message | null>(null);
   const [live, setLive] = useState<{ id: string; content: string } | null>(
     null,
@@ -184,10 +193,11 @@ function ConversationChat({
     content: string;
     model: string;
     key: string;
+    solutionId: string;
   } | null>(null);
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: () => api<{ data: Model[] }>("models"),
+    queryKey: ["providers"],
+    queryFn: () => api<{ data: Model[] }>("providers"),
   });
   const conversation = useQuery({
     queryKey: ["conversation", id],
@@ -197,8 +207,35 @@ function ConversationChat({
     queryKey: ["messages", id],
     queryFn: () => api<Page<Message>>(`conversations/${id}/messages`),
   });
+  const mode = conversation.data?.data.provider_mode ?? "openai";
   const selectedModel =
-    model || models.data?.data.find((m) => m.available)?.id || "";
+    mode === "auto"
+      ? ""
+      : conversation.data?.data.preferred_model ||
+        models.data?.data.find((m) => m.provider === mode && m.available)?.id ||
+        "";
+  const solutions = useQuery({
+    queryKey: ["solutions", project.id, solutionSearch],
+    queryFn: () =>
+      api<{
+        data: {
+          id: string;
+          error_signature: string;
+          state: string;
+          compatibility: Record<string, unknown>;
+        }[];
+      }>(
+        `projects/${project.id}/solutions?search=${encodeURIComponent(solutionSearch)}`,
+      ),
+  });
+  const chosenSolution = solutions.data?.data.find((s) => s.id === solutionId);
+  const compatibility = chosenSolution
+    ? Object.fromEntries(
+        Object.entries(chosenSolution.compatibility).filter(
+          ([k]) => k !== "repository_digest",
+        ),
+      )
+    : null;
   const active =
     pending ??
     messages.data?.data.find(
@@ -213,16 +250,26 @@ function ConversationChat({
       if (
         !request.current ||
         request.current.content !== content ||
-        request.current.model !== selectedModel
+        request.current.model !== selectedModel ||
+        request.current.solutionId !== solutionId
       )
         request.current = {
           content,
           model: selectedModel,
+          solutionId,
           key: crypto.randomUUID(),
         };
       return api<{ data: Message }>(`conversations/${id}/messages`, "POST", {
         content,
-        model: selectedModel,
+        ...(selectedModel ? { model: selectedModel } : {}),
+        ...(chosenSolution
+          ? {
+              solution_context: {
+                error_signature: chosenSolution.error_signature,
+                compatibility,
+              },
+            }
+          : {}),
         idempotency_key: request.current.key,
       });
     },
@@ -305,10 +352,14 @@ function ConversationChat({
     remove.error ||
     rename.error;
   const canSend =
-    project.cloud_processing_allowed &&
     !project.archived_at &&
-    !!selectedModel &&
-    models.data?.data.some((m) => m.id === selectedModel && m.available);
+    (mode !== "openai" || project.cloud_processing_allowed) &&
+    models.data?.data.some(
+      (m) =>
+        m.available &&
+        (project.cloud_processing_allowed || m.provider !== "openai") &&
+        (mode === "auto" || m.id === selectedModel),
+    );
   return (
     <div className="min-w-0">
       <h2>{conversation.data?.data.title ?? "Conversation"}</h2>
@@ -346,6 +397,24 @@ function ConversationChat({
       {active && (
         <button onClick={() => setReconnect((n) => n + 1)}>Reconnect</button>
       )}
+      <button
+        disabled={models.isFetching}
+        onClick={() => {
+          void models.refetch();
+        }}
+      >
+        Refresh provider status
+      </button>
+      {conversation.data && (
+        <ProviderPreferences
+          key={`${id}:${mode}:${conversation.data.data.preferred_model}:${conversation.data.data.allow_fallback}`}
+          id={id}
+          preferences={conversation.data.data}
+          models={models.data?.data ?? []}
+          disabled={!!active}
+          cloudAllowed={project.cloud_processing_allowed}
+        />
+      )}
       <SummaryPanel conversationId={id} disabled={!canSend || !!active} />
       <div aria-label="Messages" aria-live="polite" className="my-5">
         {messages.isPending && <p>Loading messages…</p>}
@@ -359,9 +428,21 @@ function ConversationChat({
             />
             {message.role === "assistant" && (
               <p className="mt-3 text-sm">
-                {message.model} · {message.status} · Attempt {message.attempt}
+                {message.provider ?? "openai"} · {message.model} ·{" "}
+                {message.routing?.decision ?? "saved response"} ·{" "}
+                {message.status} · Attempt {message.attempt}
                 {message.usage &&
                   ` · ${message.usage.input_tokens ?? "?"} input / ${message.usage.output_tokens ?? "?"} output tokens`}
+              </p>
+            )}
+            {message.context_metrics?.input_tokens !== undefined && (
+              <p>
+                Context: {message.context_metrics.input_tokens} estimated input
+                tokens ·{" "}
+                {Math.round(
+                  (message.context_metrics.reduction_fraction ?? 0) * 100,
+                )}
+                % reduction against full-history baseline
               </p>
             )}
             {message.code_sources && message.code_sources.length > 0 && (
@@ -421,25 +502,42 @@ function ConversationChat({
         }}
       >
         <label>
-          AI model
+          Find a saved error signature
+          <input
+            maxLength={180}
+            value={solutionFilter}
+            onChange={(e) => setSolutionFilter(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setSolutionSearch(solutionFilter);
+            setSolutionId("");
+          }}
+        >
+          Find solutions
+        </button>
+        <label>
+          Check a compatible saved solution first
           <select
-            value={selectedModel}
-            onChange={(event) => setModel(event.target.value)}
-            required
+            value={solutionId}
+            onChange={(e) => setSolutionId(e.target.value)}
           >
-            <option value="">Select configured model</option>
-            {models.data?.data.map((m) => (
-              <option key={m.id} value={m.id} disabled={!m.available}>
-                {m.provider} · {m.id}
-                {!m.available && " (not configured)"}
-              </option>
-            ))}
+            <option value="">No cache lookup</option>
+            {solutions.data?.data
+              .filter((s) => s.state === "active")
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.error_signature}
+                </option>
+              ))}
           </select>
         </label>
         {!models.isPending && !models.data?.data.some((m) => m.available) && (
           <p>
-            Configure OPENAI_API_KEY and OPENAI_MODEL on the server to enable
-            chat.
+            No configured provider is currently available. Check server settings
+            and provider status.
           </p>
         )}
         <label>

@@ -1,0 +1,4 @@
+# Administrator-only provisioning override. Restore base private networking before inference.
+services:
+  ollama:
+    networks: [backend, egress]

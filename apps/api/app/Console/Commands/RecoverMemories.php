@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ConversationSummary;
 use App\Models\Memory;
+use App\Models\ModelCall;
 use Illuminate\Console\Command;
 
 class RecoverMemories extends Command
@@ -15,6 +16,10 @@ class RecoverMemories extends Command
     public function handle(): int
     {
         $index = Memory::whereIn('index_status', ['pending', 'indexing'])->where('updated_at', '<', now()->subMinutes(5))->update(['index_status' => 'failed', 'index_error' => 'worker_interrupted']);
+        $stale = ConversationSummary::whereIn('status', ['queued', 'processing'])->where('updated_at', '<', now()->subMinutes(5))->get();
+        foreach ($stale as $summary) {
+            ModelCall::where('source_type', 'summary')->where('source_id', $summary->id)->where('attempt', $summary->attempt)->where('status', 'reserved')->update(['status' => 'uncertain', 'error_code' => 'worker_interrupted']);
+        }
         $summaries = ConversationSummary::whereIn('status', ['queued', 'processing'])->where('updated_at', '<', now()->subMinutes(5))->update(['status' => 'failed', 'error_code' => 'worker_interrupted']);
         $this->info("Recovered {$index} memories and {$summaries} summaries.");
 

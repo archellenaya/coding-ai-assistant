@@ -1,0 +1,29 @@
+# Disposable protocol fixture, never a real model. No external provider key or port is used.
+services:
+  ollama:
+    image: coding-ai-assistant-intelligence
+    entrypoint: [python, /app/tests/ollama_fixture.py]
+    command: []
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11434/api/tags')"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+  api:
+    environment:
+      OPENAI_API_KEY: ''
+      OPENAI_MODEL: ''
+      AI_MODELS_JSON: '[{"id":"fixture-local","provider":"ollama","context_window":8192,"max_output_tokens":1024,"tokenizer":"o200k_base"}]' 
+      OLLAMA_MODEL: ''
+  worker:
+    environment:
+      OPENAI_API_KEY: ''
+      OPENAI_MODEL: ''
+      AI_MODELS_JSON: '[{"id":"fixture-local","provider":"ollama","context_window":8192,"max_output_tokens":1024,"tokenizer":"o200k_base"}]' 
+      OLLAMA_MODEL: ''
+  summary-worker:
+    environment:
+      OPENAI_API_KEY: ''
+      OPENAI_MODEL: ''
+      AI_MODELS_JSON: '[{"id":"fixture-local","provider":"ollama","context_window":8192,"max_output_tokens":1024,"tokenizer":"o200k_base"}]' 
+      OLLAMA_MODEL: ''

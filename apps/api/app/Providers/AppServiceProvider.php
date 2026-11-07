@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('providers', fn ($r) => Limit::perMinute(10)->by($r->user()->id));
         RateLimiter::for('api', fn ($r) => Limit::perMinute(120)->by($r->user()?->id ?: $r->ip()));
         RateLimiter::for('auth', fn ($r) => Limit::perMinute(5)->by($r->ip()));
         RateLimiter::for('memory', fn ($r) => Limit::perMinute(20)->by($r->user()->id));

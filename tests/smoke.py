@@ -34,7 +34,7 @@ conversation = browser.request(f'/api/v1/projects/{project_id}/conversations', '
 conversation_id = conversation['id']
 conversation_url = f'/api/v1/conversations/{conversation_id}'
 assert len(browser.request(f'/api/v1/projects/{project_id}/conversations?search=')['data']) == 1
-browser.request(conversation_url + '/messages', 'POST', {'content': 'Do not send this fixture upstream', 'model': 'unconfigured-' + str(uuid.uuid4()), 'idempotency_key': str(uuid.uuid4())}, expected=403)
+browser.request(conversation_url + '/messages', 'POST', {'content': 'Do not send this fixture upstream', 'model': 'unconfigured-' + str(uuid.uuid4()), 'idempotency_key': str(uuid.uuid4())}, expected=403 if conversation.get('provider_mode','openai')=='openai' else 422)
 assert browser.request(conversation_url + '/messages')['data'] == []
 browser.request('/api/v1/models')
 if '--memory' in sys.argv:
@@ -58,7 +58,9 @@ if '--memory' in sys.argv:
     browser.request('/api/v1/memories/' + memory_id + '/invalidate', 'POST')
     assert browser.request(f'/api/v1/projects/{project_id}/memories/search', 'POST', {'query': 'credentials'})['data'] == []
     assert browser.request(conversation_url + '/summary')['data'] is None
-    browser.request(conversation_url + '/summary', 'POST', expected=403)
+    browser.request(conversation_url+'/preferences','PATCH',{'provider_mode':'openai','preferred_model':None,'allow_fallback':False},expected=403)
+    if conversation.get('provider_mode','openai')=='openai':
+        browser.request(conversation_url + '/summary', 'POST', expected=403)
 
 if '--chat-fixture' in sys.argv:
     fixture = Path(__file__).with_name('fixtures').joinpath('chat-stream.php').read_text().removeprefix('<?php')

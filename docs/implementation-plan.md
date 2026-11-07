@@ -7,8 +7,8 @@ The master specification governs scope. Approvals apply to one phase only.
 | 1 Foundation | Monorepo, Laravel, React, PostgreSQL/pgvector, Redis, Docker, authentication and project management; tests and setup docs | Completed; committed by owner |
 | 2 AI Chat | Provider interface, one cloud provider, persistent conversations, SSE, retries/idempotency | Completed; manually committed by owner |
 | 3 Persistent Memory | Provenance-aware memories, embeddings, hybrid search, summarization, correction/invalidation | Completed; manually committed by owner |
-| 4 Repository Intelligence | Read-only repository registration, safe discovery, parsing, incremental indexing and scoped source retrieval | Completed; approved by owner; awaiting manual review/commit |
-| 5 Token Optimization | ContextBuilder, verified cache, Ollama/OpenAI/Auto provider selection with per-conversation preferences/status, permitted routing/fallback, usage/costs and budgets (§§5.6.1–5.6.3) | Not approved |
+| 4 Repository Intelligence | Read-only repository registration, safe discovery, parsing, incremental indexing and scoped source retrieval | Completed; manually committed by owner (`33ea452`) |
+| 5 Token Optimization | ContextBuilder, verified cache, Ollama/OpenAI/Auto provider selection with per-conversation preferences/status, permitted routing/fallback, usage/costs and budgets (§§5.6.1–5.6.3) | Completed; approved by owner; awaiting manual review/commit |
 | 6 Error Learning | Error/debugging history, isolated approved verification, evidence and reusable solutions | Not approved |
 | 7 VS Code | SecretStorage authentication, project detection, chat, explanation/error analysis, solution retrieval, diff proposals and Ollama/OpenAI/Auto selection using shared backend preferences | Not approved |
 | 8 Production Hardening | Isolation/security evaluation, monitoring, backups, CI/CD, deployment and performance evidence | Not approved |
@@ -46,7 +46,7 @@ Organization invitations, repository association/detection, AI settings beyond c
 - Private authenticated FastAPI intelligence service, offline runtime model, pinned Python dependencies, metadata/fingerprint generation guards, Docker startup and tests.
 - Memory Explorer and summary controls with clear verification/error states.
 
-Phase 3 is complete. The owner explicitly approved Phase 4 by replying “yes” in this conversation. Implement repository intelligence only, then stop before Phase 5.
+Phase 3 is complete. The owner explicitly approved Phase 4 by replying “yes” in this conversation. Phase 4 was implemented and committed. The owner subsequently explicitly approved Phase 5; stop before Phase 6.
 
 ## Phase 4 acceptance and implementation
 
@@ -60,9 +60,11 @@ Phase 3 is complete. The owner explicitly approved Phase 4 by replying “yes”
 - Test security, project directories, read-only behavior, grammars, text preservation, hashes, incremental/deleted work, failure retention, authorization changes, stale cancellation, vector rotations, retrieval quality, chat provenance and UI. Run previous-phase regressions and real PostgreSQL/offline CPU integration.
 - Reindex a repository explicitly through Project Explorer after embedding or parser changes. New generation profiles rebuild unchanged files; incompatible old vectors are excluded while lexical retrieval stays available.
 
-Phase 5 remains unapproved: no provider switching, router, model-aware ContextBuilder, usage/cost ledger or verified cache is added. Phase 6 verification/execution and Phase 7 extension remain unimplemented.
+At the Phase 4 boundary these Phase 5 features were deferred. The later Phase 5 approval and implementation are recorded below. Phase 6 verification/execution and Phase 7 extension remain unimplemented.
 
 ## Historical provider-switching specification review — 2026-11-07
+
+This comparison predates the Phase 5 approval. Its gaps describe the Phase 4 baseline; current Phase 5 work is recorded below.
 
 The updated master specification incorporates the former §20 into §§5.6.1–5.6.3 and adds explicit requirements to §§2, 5.2, 6, 8, 9, 12, 13 and 17. The complete React/backend feature belongs to **Phase 5**, with the VS Code selector in **Phase 7**. Phase 2 requires the provider interface and one working cloud adapter, not the complete selector. Phases 1–3 remain completed; this earlier review did not reopen them or authorize Phase 4, 5 or 7. Phase 4 was subsequently approved separately.
 
@@ -102,3 +104,19 @@ Expose Ollama/OpenAI/Auto and available-model selection in the VS Code client us
 ### Historical documentation-review approval boundary
 
 This paragraph records the earlier review; Phase 4 was subsequently explicitly approved as described above. Phase 3 is completed and manually committed (`f34b4a6`). This specification review authorizes documentation updates only. Phase 4 remains the next planned milestone and requires explicit approval; Phase 5/7 provider switching is deferred until those phases are approved. No migrations, adapter implementations, endpoints or UI switching controls are added in this review.
+
+## Approved Phase 5 implementation and acceptance
+
+The owner explicitly approved Phase 5 after review of `AGENTS.md`/progress and the approval question. Do not restart prior phases. Preserve Phase 4 commit `33ea452`; implement Phase 5 only and stop before Phase 6.
+
+- Persist per-conversation mode/model/fallback consent, preserve legacy OpenAI defaults and condition new Auto defaults on multiple configured providers plus privacy policy.
+- Maintain validated public server-owned provider/model registry tables; keep credentials in environment, never API output. Provide bounded authenticated metadata probes and clear availability/billing limitations.
+- Route forced/Auto modes with private/local policy, explicit fallback consent, configured capability/context/quality/cost/latency and scoped historical success/latency. Snapshot queued candidate plans; never silently reroute forced choices or replay after inference begins.
+- Normalize OpenAI/Ollama streams, errors, usage and output/context caps into existing durable transport. Ollama optional, CPU-capable, private and cloud-disabled. Summary snapshots share the selected policy/budget/ledger.
+- ContextBuilder locally counts the configured encoding, reserves output/framing/safety, chooses whole recent pairs/ready summary/untrusted source and memory with adaptive priorities/deduplication, fails insufficient mandatory input, records measurable same-counter reduction. No hidden paid summaries or truncation.
+- Reuse only private manually attested successful evidence under exact compatibility plus current indexed repository digest. Server controls evidence actor/kind; never auto-promote an AI answer. Lock/recheck invalidation and source state before cache publication. General verification execution/history remains Phase 6.
+- Add model_calls plus usage_ledgers with atomic user/org/project reservation caps, known-price settlement, uncertain-spend retention and duplicate-attempt guards. Retain financial metadata after project deletion. Report user-private calls and authorized aggregate tokens, cached tokens, latency, estimates, reservations and zero local API fees distinct from infrastructure costs.
+- React selectors/status, actual attribution/decisions, cache controls and Solutions & usage UI. Update OpenAPI, configuration/setup, architecture, ADR and progress.
+- Validate previous-phase regressions; forced/local/Auto/unavailable/consent/privacy paths; queued preference changes; context limits/whole chunks; cache evidence/compatibility/isolation; scoped budgets including a real PostgreSQL concurrent reservation race; stream failure/no-replay; real offline tokenizer/embedding assets; UI behavior; and live HTTP/queue pipeline using explicitly labeled provider fixtures. Never claim fixture output as real model inference.
+
+Phase 6 — Error Learning is the next planned milestone, **not approved**. No indexed code execution, error-learning pipeline, VS Code work or production-hardening phase is started.

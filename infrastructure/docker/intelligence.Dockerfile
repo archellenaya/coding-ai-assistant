@@ -1,12 +1,12 @@
 FROM python:3.12.10-slim-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 FASTEMBED_CACHE_PATH=/opt/models HF_HUB_DISABLE_XET=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 FASTEMBED_CACHE_PATH=/opt/models HF_HUB_DISABLE_XET=1 TIKTOKEN_CACHE_DIR=/opt/tokenizers
 WORKDIR /app
 COPY services/intelligence/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
-COPY services/intelligence/download_model.py ./
+COPY services/intelligence/download_model.py services/intelligence/download_tokenizers.py ./
 ARG EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 ARG EMBEDDING_REVISION=aa8f8b060edb00e03bfdd08813a2949946c8ba55
-RUN python download_model.py
+RUN python download_model.py && python download_tokenizers.py
 COPY services/intelligence/ ./
 ENV HF_HUB_OFFLINE=1
 USER 10001:10001

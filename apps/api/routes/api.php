@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AIController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\MemoryController;
@@ -36,6 +37,15 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('repositories/{repository}/files', [RepositoryController::class, 'files']);
         Route::post('repositories/{repository}/index', [RepositoryController::class, 'enqueue'])->middleware('throttle:repository');
         Route::get('code-chunks/{codeChunk}', [RepositoryController::class, 'chunk']);
+        Route::get('usage', [AIController::class, 'userUsage']);
+        Route::get('providers', [AIController::class, 'providers'])->middleware('throttle:providers');
+        Route::get('conversations/{conversation}/preferences', [AIController::class, 'preferences']);
+        Route::patch('conversations/{conversation}/preferences', [AIController::class, 'updatePreferences'])->middleware('throttle:providers');
+        Route::get('projects/{project}/solutions', [AIController::class, 'solutions']);
+        Route::post('projects/{project}/solutions', [AIController::class, 'createSolution']);
+        Route::post('solutions/{solution}/invalidate', [AIController::class, 'invalidateSolution']);
+        Route::get('projects/{project}/usage', [AIController::class, 'usage']);
+        Route::get('organizations/{organization}/usage', [AIController::class, 'organizationUsage']);
         Route::get('models', [ConversationController::class, 'models']);
         Route::get('projects/{project}/conversations', [ConversationController::class, 'index']);
         Route::post('projects/{project}/conversations', [ConversationController::class, 'store']);

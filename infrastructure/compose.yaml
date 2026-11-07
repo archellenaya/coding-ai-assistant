@@ -15,6 +15,7 @@ x-api: &api
 services:
   api:
     <<: *api
+    networks: [backend, egress]
     healthcheck:
       test: [CMD, php, -r, "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
       interval: 15s
@@ -56,6 +57,20 @@ services:
       EMBEDDING_VERSION: ${EMBEDDING_VERSION:-bge-small-en-v1.5-local-v1}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
     networks: [backend]
+  ollama:
+    image: ollama/ollama:0.13.5
+    profiles: [local-ai]
+    environment:
+      OLLAMA_NO_CLOUD: '1'
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_WINDOW:-8192}
+      OLLAMA_NUM_PARALLEL: '1'
+    networks: [backend]
+    volumes: [ollama-models:/root/.ollama]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 15s
+      timeout: 5s
+      retries: 5
   scheduler:
     <<: *api
     command: [php, artisan, schedule:work]
@@ -99,3 +114,4 @@ volumes:
   postgres-data:
   redis-data:
   api-storage:
+  ollama-models:

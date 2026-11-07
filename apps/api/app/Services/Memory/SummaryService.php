@@ -6,18 +6,19 @@ use App\Jobs\SummarizeConversation;
 use App\Models\Conversation;
 use App\Models\ConversationSummary;
 use App\Models\User;
+use App\Services\AI\ModelRouter;
 use App\Services\Chat\ChatAccess;
 use Illuminate\Support\Facades\DB;
 
 class SummaryService
 {
-    public function __construct(private ChatAccess $access) {}
+    public function __construct(private ChatAccess $access, private ModelRouter $router) {}
 
     public function request(Conversation $conversation, User $user, bool $retry, ?string $summaryId = null, ?int $attempt = null): ConversationSummary
     {
         return DB::transaction(function () use ($conversation, $user, $retry, $summaryId, $attempt) {
             $conversation = Conversation::whereKey($conversation->id)->lockForUpdate()->firstOrFail();
-            $this->access->assertCanSend($conversation, $user);
+            $this->access->assertCanSend($conversation, $user, $conversation->provider_mode === 'openai' ? 'openai' : null);
             abort_if($conversation->messages()->whereIn('status', ['queued', 'streaming'])->exists(), 409, 'Wait for the active response.');
             if ($retry) {
                 $summary = ConversationSummary::where('conversation_id', $conversation->id)->whereKey($summaryId)->firstOrFail();
@@ -36,12 +37,13 @@ class SummaryService
                     return $summary;
                 }
             }
+            $selection = $this->router->select($conversation, $user, 'Summarize conversation', null, $retry ? $summary->routing : null);
             $input = $this->input($conversation, (int) $sequence);
             abort_if(mb_strlen($input) > config('memory.summary_input_chars'), 422, 'Summary source exceeds the limit; no text was truncated.');
             if ($summary) {
-                $summary->update(['status' => 'queued', 'content' => null, 'error_code' => null, 'attempt' => $summary->attempt + 1, 'model' => config('chat.model')]);
+                $summary->update(['status' => 'queued', 'content' => null, 'error_code' => null, 'attempt' => $summary->attempt + 1, 'model' => $selection['model']['id'], 'provider' => $selection['model']['provider'], 'routing' => $selection['routing']]);
             } else {
-                $summary = ConversationSummary::create(['conversation_id' => $conversation->id, 'through_sequence' => $sequence, 'status' => 'queued', 'model' => config('chat.model')]);
+                $summary = ConversationSummary::create(['conversation_id' => $conversation->id, 'through_sequence' => $sequence, 'status' => 'queued', 'model' => $selection['model']['id'], 'provider' => $selection['model']['provider'], 'routing' => $selection['routing']]);
             }
             SummarizeConversation::dispatch($summary->id, $summary->attempt)->onConnection('database')->onQueue('summary')->beforeCommit();
 

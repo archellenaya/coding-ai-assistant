@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, Link } from "react-router-dom";
 import { api, ApiError } from "./api";
 import ChatWorkspace from "./ChatWorkspace";
+import OptimizationPage from "./OptimizationPage";
 import ProjectExplorer from "./ProjectExplorer";
 import MemoryExplorer from "./MemoryExplorer";
 type User = { id: string; name: string };
@@ -201,6 +202,9 @@ function Projects() {
               <Link to={`/projects/${p.id}/chat`}>Open chat</Link>
               <Link to={`/projects/${p.id}/memories`}>Memory</Link>
               <Link to={`/projects/${p.id}/repository`}>Repository</Link>
+              <Link to={`/projects/${p.id}/optimization`}>
+                Solutions & usage
+              </Link>
               <button onClick={() => setEditing(p)}>Edit</button>
               <button
                 onClick={() =>
@@ -233,7 +237,9 @@ function Projects() {
                 disabled={mutation.isPending}
                 onClick={() => {
                   if (
-                    window.confirm(`Delete ${p.name}? This cannot be undone.`)
+                    window.confirm(
+                      `Delete ${p.name}? Project content will be removed. Usage records remain for spending limits.`,
+                    )
                   )
                     mutation.mutate({
                       path: `projects/${p.id}`,
@@ -312,6 +318,10 @@ export default function App() {
           <Route
             path="/projects/:projectId/repository"
             element={<ProjectExplorer />}
+          />
+          <Route
+            path="/projects/:projectId/optimization"
+            element={<OptimizationPage />}
           />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>

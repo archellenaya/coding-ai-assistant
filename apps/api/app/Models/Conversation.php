@@ -9,11 +9,11 @@ class Conversation extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['project_id', 'user_id', 'title'];
+    protected $fillable = ['project_id', 'user_id', 'title', 'provider_mode', 'preferred_model', 'allow_fallback'];
 
     protected function casts(): array
     {
-        return [];
+        return ['allow_fallback' => 'boolean'];
     }
 
     public function project()

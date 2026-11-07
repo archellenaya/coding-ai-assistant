@@ -9,7 +9,7 @@ class ConversationSummary extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['conversation_id', 'through_sequence', 'status', 'content', 'model', 'attempt', 'usage', 'error_code'];
+    protected $fillable = ['conversation_id', 'through_sequence', 'status', 'content', 'model', 'attempt', 'usage', 'error_code', 'provider', 'routing'];
 
     protected $attributes = ['attempt' => 1];
 
@@ -17,7 +17,7 @@ class ConversationSummary extends Model
 
     protected function casts(): array
     {
-        return ['usage' => 'array', 'attempt' => 'integer', 'through_sequence' => 'integer'];
+        return ['routing' => 'array', 'usage' => 'array', 'attempt' => 'integer', 'through_sequence' => 'integer'];
     }
 
     public function conversation()

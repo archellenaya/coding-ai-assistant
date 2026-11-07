@@ -6,6 +6,8 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageEvent;
 use App\Models\Project;
+use App\Services\AI\ModelCatalog;
+use App\Services\AI\SolutionCache;
 use App\Services\Chat\ChatService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,7 @@ class ConversationController extends Controller
         abort_if($project->archived_at, 409, 'Project is archived.');
         $data = $request->validate(['title' => 'required|string|max:150']);
 
-        return response()->json(['data' => Conversation::create($data + ['project_id' => $project->id, 'user_id' => $request->user()->id])], 201);
+        return response()->json(['data' => Conversation::create($data + app(ModelCatalog::class)->defaults($project) + ['project_id' => $project->id, 'user_id' => $request->user()->id])], 201);
     }
 
     public function show(Conversation $conversation)
@@ -68,7 +70,7 @@ class ConversationController extends Controller
     public function send(Request $request, Conversation $conversation, ChatService $chat)
     {
         Gate::authorize('view', $conversation);
-        $data = $request->validate(['content' => 'required|string|max:12000', 'model' => 'required|string|max:150', 'idempotency_key' => 'required|uuid']);
+        $data = $request->validate(['content' => 'required|string|max:12000', 'model' => 'sometimes|nullable|string|max:150', 'idempotency_key' => 'required|uuid', 'solution_context' => 'sometimes|array:error_signature,compatibility'] + ($request->has('solution_context') ? SolutionCache::rules('solution_context.') : []));
 
         return response()->json(['data' => $chat->send($conversation, $request->user(), $data)], 202);
     }
@@ -123,8 +125,8 @@ class ConversationController extends Controller
 
     public function models()
     {
-        $model = config('chat.model');
+        $models = app(ModelCatalog::class)->models();
 
-        return response()->json(['data' => $model ? [['id' => $model, 'provider' => 'openai', 'capabilities' => ['text', 'streaming'], 'context_window' => config('chat.context_window'), 'max_output_tokens' => config('chat.max_output_tokens'), 'input_price_per_million' => config('chat.input_price_per_million'), 'output_price_per_million' => config('chat.output_price_per_million'), 'available' => (bool) config('chat.api_key')]] : []]);
+        return response()->json(['data' => array_map(fn ($m) => $m + ['available' => $m['configured'], 'availability_kind' => 'configured_only'], $models)]);
     }
 }

@@ -70,7 +70,8 @@ beforeEach(() => {
       } as never;
     if (path.startsWith("projects/p1/conversations?"))
       return { data: [conversation], last_page: 1 } as never;
-    if (path === "models") return { data: [model] } as never;
+    if (path.startsWith("projects/p1/solutions")) return { data: [] } as never;
+    if (path === "providers") return { data: [model] } as never;
     if (path === "conversations/c1") return { data: conversation } as never;
     if (path === "conversations/c1/messages" && method === "POST") {
       submissions.push({ body });

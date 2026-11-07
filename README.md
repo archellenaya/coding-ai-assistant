@@ -1,6 +1,6 @@
 # Coding AI Assistant
 
-Phases 1–4: a Laravel API and React TypeScript workspace with authenticated project management, private streaming AI chat, persistent project memory and read-only repository intelligence. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
+Phases 1–5: a Laravel API and React TypeScript workspace with authenticated project management, private streaming AI chat, persistent memory, read-only repository intelligence, provider switching and bounded AI usage. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
 
 ## Docker startup
 
@@ -156,7 +156,7 @@ This creates disposable smoke accounts and a project, tests real local embedding
 docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml run --rm --no-deps -e RUN_REAL_EMBEDDINGS=1 intelligence python -m pytest -q -p no:cacheprovider
 ```
 
-The normal API and React test commands remain unchanged. Phase 2 evidence is archived in [docs/history/phase-2.md](docs/history/phase-2.md). Phase 4 repository intelligence is implemented below; stop before unapproved Phase 5.
+The normal API and React test commands remain unchanged. Phase 2 evidence is archived in [docs/history/phase-2.md](docs/history/phase-2.md). Phase 4 repository intelligence is implemented below; Phase 5 is now implemented; stop before unapproved Phase 6.
 
 ## Phase 4: read-only repository intelligence
 
@@ -187,7 +187,7 @@ The indexer supports Tree-sitter Python, JavaScript/JSX, TypeScript/TSX and PHP,
 
 Index again after source changes: unchanged compatible file hashes retain chunk IDs/embeddings, modified files are replaced, deleted files are removed. Reindex after embedding profile or parser changes; incompatible vectors are excluded until rebuilt, with lexical fallback available. Git HEAD is provenance; content hashes identify actual indexed workspace text, including uncommitted changes. Use a stable checkout for reproducible snapshots. Chat selects bounded relevant source as untrusted context and shows source links; modified/deleted chunk links can expire. Cloud processing must still be explicitly enabled for cloud chat. Indexing/search use local CPU embeddings and incur no cloud inference calls.
 
-Phase 5 (provider switching, Ollama, model-aware token optimization and usage/cost tracking) remains unapproved and unimplemented.
+Phase 5 is implemented below; Phase 6 error learning remains unapproved.
 
 For a full local source pipeline smoke check, first start with a dedicated **disposable** directory mounted through the repository override, then run:
 
@@ -196,3 +196,54 @@ python3 tests/repository_smoke.py --root /path/to/the/disposable-mounted-root
 ```
 
 The script creates a new project UUID directory with synthetic source and Git HEAD metadata, exercises real read-only discovery/CPU embeddings/pgvector/incremental updates/project-directory denial, and removes only its newly created fixture/project. It never executes Git or calls cloud inference. Keep normal source provisioned separately. Previous transport/memory smoke tests remain `python3 tests/smoke.py --chat-fixture --memory`.
+
+## Phase 5: provider selection, context budgets and usage
+
+Rebuild and apply additive migrations using the upgrade commands above, then recreate the stack. Existing conversations keep OpenAI as their default; new conversations default to Auto only when multiple providers are configured and cloud policy permits it. In chat, select **AI provider** and **AI model**, explicitly save preferences, and refresh provider status when needed. Forced Ollama/OpenAI never change providers. Auto's optional fallback consent permits an available authorized alternative only before inference starts; partial/interrupted attempts require explicit retry and may incur another charge. Preference edits affect future sends, preserving queued plans and historical attribution.
+
+OpenAI still reads root Docker `.env` fields `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_CONTEXT_WINDOW`, `OPENAI_INPUT_PRICE_PER_MILLION` and `OPENAI_OUTPUT_PRICE_PER_MILLION`. For host Laravel development use `apps/api/.env` instead. Set the actual model context/prices and appropriate `OPENAI_TOKENIZER` (`o200k_base`, `cl100k_base`, or conservative `utf8-bytes`); model names/capabilities are not hardcoded. Blank prices remain **unknown**, with conservative reservation rates used for spending controls. API billing is separate from ChatGPT subscriptions. Model metadata availability is not proof of usable quota/billing or successful inference; errors remain explicit. Credentials are server-only.
+
+Optional local generation uses `OLLAMA_URL=http://ollama:11434`, `OLLAMA_MODEL=<your-installed-local-model>` and `OLLAMA_CONTEXT_WINDOW`. Embeddings retain their separate model/version/fingerprint; changing the chat provider does not re-embed history/source. Local-only projects can chat/summarize through configured Ollama without cloud permission. Default local counting uses a conservative UTF-8 byte bound rather than claiming an exact unknown model tokenizer. Python performs configured OpenAI BPE text counting entirely offline with pinned build-time assets and a framing/safety reservation; no project text is sent to an external tokenizer.
+
+Start the optional pinned CPU-capable Ollama service (image download can exceed 2 GiB; GPU not required):
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml --profile local-ai up -d
+```
+
+The service has no host port, no runtime egress and `OLLAMA_NO_CLOUD=1`. Choose/provision a model explicitly; the application never pulls a user/model-selected URL. For the initial model download only, temporarily enable the administrator override, pull your chosen model, then **restore private networking before inference**:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml -f infrastructure/compose.ollama-download.yaml --profile local-ai up -d ollama
+docker compose --env-file .env -f infrastructure/compose.yaml exec ollama ollama pull <your-local-model>
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml --profile local-ai up -d
+```
+
+For an existing private Ollama host, set a private/loopback IP endpoint; `ollama` and `localhost` names are supported. Disable its cloud features and do not expose it publicly. Models whose name/metadata indicates cloud hosting are rejected. Configuring Ollama does not automatically grant cloud permission.
+
+`AI_MODELS_JSON` optionally adds uniquely identified server-owned models (do not repeat `OPENAI_MODEL`/`OLLAMA_MODEL`). Example shape, substituting an actual installed model and its supported limits:
+
+```json
+[{"id":"your-extra-local-model","provider":"ollama","context_window":8192,"max_output_tokens":1024,"tokenizer":"utf8-bytes","capabilities":["text","streaming"],"quality":1,"latency_ms":1000}]
+```
+
+Prices can be supplied as `input_price_per_million`, `output_price_per_million` and `cached_price_per_million`. Quality/latency are operator metadata, not a guarantee; recent scoped success/latency can inform Auto tie-breakers. Unknown fields are excluded from public records; provider credentials/endpoints must remain in their dedicated server environment fields. Removed model definitions retire without deleting history.
+
+ContextBuilder keeps the current prompt intact, reserves output/safety and selects whole recent history pairs, an existing ready summary and relevant whole source/memory blocks. It records estimated tokens/reduction/source references; insufficient context fails without slicing code. Summary generation remains explicit. `CHAT_MAX_TURNS` now defaults to 100 (capped at 100); `AI_RECENT_HISTORY_PAIRS` and `AI_SAFETY_TOKENS` control selection, not stored-history deletion. Text counts are local; protocol framing and unknown local tokenizers remain conservative estimates.
+
+Open **Solutions & usage** from a project. Project administrators can record a private solution only with successful test command/result, compatibility details and explicit manual attestation. The assistant does not run that command or independently verify it. Entries remain distinct from unverified AI memories. Chat can check a selected saved solution before inference; exact error/framework/dependencies/environment/Git and server-index digest must match. Invalidation or changed indexed files excludes a cached entry; explicitly reindex after workspace changes. Cache hits identify `cache` as the actual source and do not call a generation model. Submission still validates the configured provider plan. General verification/error-history execution is Phase 6.
+
+Usage reports separate known estimates, unknown costs and retained uncertain reservations, with tokens/cached tokens/duration grouped by actual provider/model. User call details are private; owners may inspect project/org aggregates. `AI_DAILY_USER_BUDGET_MICRO_USD`, `AI_DAILY_PROJECT_BUDGET_MICRO_USD` and `AI_DAILY_ORGANIZATION_BUDGET_MICRO_USD` default to $10/$50/$100 per UTC day. 1 USD is 1,000,000 micro-USD. Unknown prices reserve configurable conservative input/output rates; failed ambiguous requests retain that reservation because a provider may have charged. Check usage/billing before retrying. These are application estimates and controls, not invoice reconciliation or a guarantee of provider-side spend. Ollama has zero per-token API fees while hardware/hosting costs remain separate. Deleting a project does not erase financial metadata or reset caps.
+
+An explicit local protocol integration test uses **synthetic responses**, never a model or paid provider, and temporarily blanks OpenAI configuration in test containers:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml -f infrastructure/compose.ai-smoke.yaml --profile local-ai up -d
+python3 tests/check_local_health.py
+python3 tests/optimization_smoke.py
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.ai-smoke.yaml --profile local-ai stop ollama
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.ai-smoke.yaml --profile local-ai rm -f ollama
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml up -d
+```
+
+The smoke check uses live sessions, policies, queues, framing/context/summary/cache and usage storage; its generated text/token counts are explicitly fixtures. Existing smoke scripts still cover real offline embeddings/pgvector. The PostgreSQL budget-race fixture requires the separate `_test` database; see progress for the exact safe command. No paid provider tests are required. Phase 6 remains unapproved.
