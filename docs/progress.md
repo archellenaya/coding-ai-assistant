@@ -5,10 +5,10 @@ Last updated: 2026-11-07 (Asia/Singapore).
 ## Current phase, status and approval
 
 - Current phase: **Phase 3 — Persistent Memory**.
-- Status: **Completed**, awaiting owner review and manual commit.
+- Status: **Completed**; manually committed by the owner as `f34b4a6`.
 - Approval: owner explicitly replied **“yes”** to the Phase 3 approval question in this conversation.
 - Phases 1 and 2 were already implemented and manually committed by the owner. Phase 2 baseline: `fae4125`. Earlier evidence is preserved in [history/phase-1.md](history/phase-1.md) and [history/phase-2.md](history/phase-2.md), including the localhost database follow-up.
-- Phase 4: **Not approved; not started**. Provider switching in the owner's new §20 remains unapproved Phase 5 work.
+- Phase 4: **Not approved; not started**. Provider switching now specified in §§5.6.1–5.6.3 remains unapproved Phase 5 work, with VS Code integration in Phase 7.
 - Git operations: read-only inspection only; the assistant has not staged, committed, pushed, tagged, reset or changed Git history.
 
 ## Repository review and specification continuity
@@ -70,7 +70,7 @@ Issues found and fixed before completion: host Python lacked ensurepip (temporar
 
 ## Known limits and remaining work
 
-- No remaining Phase 3 implementation tasks. Owner review/manual commit remain pending.
+- No remaining Phase 3 implementation tasks; the owner committed the completed phase as `f34b4a6`.
 - Live cloud summaries/generation were **not** exercised. They use the existing provider interface and were tested with mocks, including failure, retry and privacy behavior. Account/model access and paid-provider behavior are not claimed verified.
 - Default embeddings are English-focused and whole-record pooling can dilute relevance for long/multilingual/code-heavy records. Source text is never silently truncated. Repository/symbol parsing and specialized source-code indexing are Phase 4; no repository access/indexer was added.
 - Chat memory selection uses a narrow character allowance, not model-aware ContextBuilder/token optimization. Auto/OpenAI/Ollama switching, saved provider preferences, routing/fallback, actual financial budgets and usage ledgers remain Phase 5. VS Code consumes that backend in its later approved phase.
@@ -165,3 +165,31 @@ feat(phase-3): add persistent memory and local semantic retrieval
 ## Next phase and approval
 
 **Stop here. Phase 4 — Repository Intelligence is planned but not approved.** Owner review and manual commit do not themselves authorize starting it. Wait for explicit owner approval before repository association, parsing, source-code indexing or incremental project-aware retrieval work.
+
+## Approved documentation review — AI Provider Switching (2026-11-07)
+
+The owner requested comparison of the updated master specification against the implementation, plan updates as needed, and no future-phase implementation. Initial Git status contained only the owner's modification to `docs/master-specification.md`; the assistant preserved that file unchanged. The latest owner commit is `f34b4a6` (completed Phase 3). No further implementation phase was approved by this review request.
+
+Read the updated specification, agent guidance, architecture, implementation plan and progress. Compared provider requirements with LLMProvider/ProviderEvent, the OpenAI adapter, ChatService/ChatAccess, model catalog, conversation/message schema, React chat, embedding/memory boundaries and the reserved VS Code extension.
+
+Findings: the former §20 is now detailed in §§5.6.1–5.6.3 and related schema/testing/phase/acceptance sections. Existing generic streaming/provider injection, one OpenAI adapter, persisted actual-message metadata, privacy gates and provider-independent memory satisfy the completed foundation. The full three-mode selector, persisted conversation preferences, live provider availability checks, Auto decisions, fallback consent/local-only routing, actual-provider display and per-provider latency/cost reporting remain Phase 5 work. A configured-key availability flag is not a connectivity, model-support or billing check. VS Code selection is Phase 7. The separate local embedding service is not an Ollama generation adapter.
+
+Actual changes in this review:
+
+- `docs/implementation-plan.md`: updated references, corrected the completed Phase 3 commit status, added requirement-to-code comparison and detailed Phase 5/7 acceptance checks.
+- `docs/architecture.md`: replaced the obsolete §20 reference and clarified current implementation versus deferred routing/status/accounting work.
+- `docs/progress.md`: recorded this review and the owner's Phase 3 commit while preserving the earlier implementation/test evidence.
+
+Validation for this documentation-only review: `git diff --check` passed; local Markdown link/anchor checks and preservation of the owner's specification were checked. Application tests were not rerun because no application code, migration, dependency or runtime configuration changed. Earlier test results above belong to the Phase 3 implementation run, not this review.
+
+No completed phase was restarted. Phase 3 remains complete, Phase 4 remains unapproved, and Phase 5/7 functionality was not implemented. No files were staged, committed or pushed.
+
+Suggested documentation commit:
+
+```text
+docs(plan): align provider switching with the updated specification
+
+- Map current provider foundations and gaps to the revised requirements
+- Define Phase 5 switching and Phase 7 client acceptance checks
+- Record the review without reopening completed phases
+```
