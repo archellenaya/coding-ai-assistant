@@ -137,6 +137,20 @@ def create_app(engine_factory=Engine, token: str | None = None):
             # Never return source text or internal paths/provider credentials in failures.
             raise HTTPException(503, 'Embedding generation failed') from None
 
+    from uuid import UUID
+
+    class RepositoryInput(BaseModel):
+        project_id: UUID
+        path: str = Field(min_length=1, max_length=240)
+
+    @app.post('/v1/repositories/snapshot', dependencies=[Depends(authenticate)])
+    def repository_snapshot(data: RepositoryInput):
+        from .repository import snapshot
+        try:
+            return snapshot(data.path, project_id=str(data.project_id))
+        except (ValueError, OSError, UnicodeError):
+            raise HTTPException(422, 'Repository unavailable, unsafe, or exceeds indexing limits') from None
+
     return app
 
 

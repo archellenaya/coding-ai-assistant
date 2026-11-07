@@ -7,7 +7,7 @@ The master specification governs scope. Approvals apply to one phase only.
 | 1 Foundation | Monorepo, Laravel, React, PostgreSQL/pgvector, Redis, Docker, authentication and project management; tests and setup docs | Completed; committed by owner |
 | 2 AI Chat | Provider interface, one cloud provider, persistent conversations, SSE, retries/idempotency | Completed; manually committed by owner |
 | 3 Persistent Memory | Provenance-aware memories, embeddings, hybrid search, summarization, correction/invalidation | Completed; manually committed by owner |
-| 4 Repository Intelligence | Read-only repository registration, safe discovery, parsing, incremental indexing and scoped source retrieval | Not approved |
+| 4 Repository Intelligence | Read-only repository registration, safe discovery, parsing, incremental indexing and scoped source retrieval | Completed; approved by owner; awaiting manual review/commit |
 | 5 Token Optimization | ContextBuilder, verified cache, Ollama/OpenAI/Auto provider selection with per-conversation preferences/status, permitted routing/fallback, usage/costs and budgets (§§5.6.1–5.6.3) | Not approved |
 | 6 Error Learning | Error/debugging history, isolated approved verification, evidence and reusable solutions | Not approved |
 | 7 VS Code | SecretStorage authentication, project detection, chat, explanation/error analysis, solution retrieval, diff proposals and Ollama/OpenAI/Auto selection using shared backend preferences | Not approved |
@@ -46,11 +46,25 @@ Organization invitations, repository association/detection, AI settings beyond c
 - Private authenticated FastAPI intelligence service, offline runtime model, pinned Python dependencies, metadata/fingerprint generation guards, Docker startup and tests.
 - Memory Explorer and summary controls with clear verification/error states.
 
-Stop after Phase 3. Phase 4 — Repository Intelligence requires explicit owner approval. Repository access/parsing/indexing, multi-provider routing, adaptive token budgeting and usage ledgers remain future phases.
+Phase 3 is complete. The owner explicitly approved Phase 4 by replying “yes” in this conversation. Implement repository intelligence only, then stop before Phase 5.
 
-## Provider-switching specification review — 2026-11-07
+## Phase 4 acceptance and implementation
 
-The updated master specification incorporates the former §20 into §§5.6.1–5.6.3 and adds explicit requirements to §§2, 5.2, 6, 8, 9, 12, 13 and 17. The complete React/backend feature belongs to **Phase 5**, with the VS Code selector in **Phase 7**. Phase 2 requires the provider interface and one working cloud adapter, not the complete selector. Phases 1–3 remain completed; this review does not reopen them or authorize Phase 4, 5 or 7.
+- Register project-scoped local repository paths; project configuration requires organization ownership plus both memberships. Project source is shared with authorized project members; private conversation memories remain private.
+- Opt-in Docker bind mount exposes only a dedicated administrator directory to Python, read-only. Layout is `<root>/<project UUID>/<relative repository path>`. UUID comes from Laravel's authorized project, never browser-selected internal scan parameters. Reject traversal, symlinks, external Git metadata/worktrees and arbitrary URLs. Never run Git hooks, shell commands or source code.
+- Discover approved UTF-8 text extensions; exclude hidden/credential/dependency/generated/binary files and obvious embedded secrets. Fixed traversal/file/byte/chunk limits fail explicitly and preserve the old index. Administrator must sanitize mounted source; detection is defense in depth, not a universal secret scanner.
+- Parse Python, JavaScript, TypeScript/TSX and PHP using pinned Tree-sitter grammars; clearly identify text fallback for other supported extensions. Preserve text, split oversized symbols into bounded chunks, and store symbol/line/hash/revision provenance.
+- Database-queued indexing uses idempotent active-job submission, single claims, owner/access/archive rechecks, stale recovery and guarded atomic publication. Reuse compatible hash/parser/profile files; replace changed files/generations and cascade deleted-file chunks. No filesystem writes or paid inference.
+- Hybrid project source search combines PostgreSQL full-text, exact symbols and profile/dimension-compatible pgvector cosine using reciprocal rank fusion. API provides metadata/status/files/search/source inspection with pagination and rate limits. Deleting association removes stored index, never mounted files.
+- Add whole source chunks to existing chat character allowance after memory selection, as untrusted data with persisted references. Show links in chat and a Project Explorer for registration, indexing, status, files, framework/language metadata, source search/inspection/removal.
+- Test security, project directories, read-only behavior, grammars, text preservation, hashes, incremental/deleted work, failure retention, authorization changes, stale cancellation, vector rotations, retrieval quality, chat provenance and UI. Run previous-phase regressions and real PostgreSQL/offline CPU integration.
+- Reindex a repository explicitly through Project Explorer after embedding or parser changes. New generation profiles rebuild unchanged files; incompatible old vectors are excluded while lexical retrieval stays available.
+
+Phase 5 remains unapproved: no provider switching, router, model-aware ContextBuilder, usage/cost ledger or verified cache is added. Phase 6 verification/execution and Phase 7 extension remain unimplemented.
+
+## Historical provider-switching specification review — 2026-11-07
+
+The updated master specification incorporates the former §20 into §§5.6.1–5.6.3 and adds explicit requirements to §§2, 5.2, 6, 8, 9, 12, 13 and 17. The complete React/backend feature belongs to **Phase 5**, with the VS Code selector in **Phase 7**. Phase 2 requires the provider interface and one working cloud adapter, not the complete selector. Phases 1–3 remain completed; this earlier review did not reopen them or authorize Phase 4, 5 or 7. Phase 4 was subsequently approved separately.
 
 ### Requirement-to-implementation comparison
 
@@ -85,6 +99,6 @@ These are planned checks, not completed functionality or executed test claims:
 
 Expose Ollama/OpenAI/Auto and available-model selection in the VS Code client using the Phase 5 preference/status APIs. Confirm that selection made in either client persists per conversation and is visible in the other, with the same server policy enforcement and actual-response attribution. Keep provider credentials on the server; use SecretStorage for extension authentication tokens only.
 
-### Approval boundary
+### Historical documentation-review approval boundary
 
-Phase 3 is completed and manually committed (`f34b4a6`). This specification review authorizes documentation updates only. Phase 4 remains the next planned milestone and requires explicit approval; Phase 5/7 provider switching is deferred until those phases are approved. No migrations, adapter implementations, endpoints or UI switching controls are added in this review.
+This paragraph records the earlier review; Phase 4 was subsequently explicitly approved as described above. Phase 3 is completed and manually committed (`f34b4a6`). This specification review authorizes documentation updates only. Phase 4 remains the next planned milestone and requires explicit approval; Phase 5/7 provider switching is deferred until those phases are approved. No migrations, adapter implementations, endpoints or UI switching controls are added in this review.

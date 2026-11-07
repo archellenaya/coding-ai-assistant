@@ -1,6 +1,6 @@
 # Coding AI Assistant
 
-Phases 1–3: a Laravel API and React TypeScript workspace with authenticated project management private streaming AI chat, and persistent project memory. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
+Phases 1–4: a Laravel API and React TypeScript workspace with authenticated project management, private streaming AI chat, persistent project memory and read-only repository intelligence. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
 
 ## Docker startup
 
@@ -142,7 +142,7 @@ Use `--project=<uuid>` to restrict backfill/reindex to one project. Corrections/
 
 In chat, **Summarize conversation** queues a snapshot of completed turns using your configured cloud model. Cloud processing must be enabled and model/key configured. It may incur a charge. Repeating a request for the same snapshot reuses it; retry requires the failed summary ID and attempt (handled by the UI), is limited to three attempts, and is never automatic. Source/output beyond bounds fails without truncation. The ready summary becomes an unverified, locally embedded memory. Later conversations retrieve relevant private memories as untrusted data and show source links. Current-conversation records are excluded to avoid duplicating history; this is retrieval, not training or fine-tuning.
 
-To change embedding models, set the matching supported model, immutable snapshot revision, version and dimensions; rebuild/recreate intelligence and Laravel services, then run `memory:reindex`. Fingerprint/profile matching excludes incompatible old vectors during rebuild; keyword retrieval remains available. Never just change dimension metadata on existing vectors. See [architecture](docs/architecture.md) and [ADR 0003](docs/decisions/0003-private-memory.md) for tradeoffs. Default mean-pooled embeddings and the English-focused model have relevance limitations; repository-aware chunking and advanced token optimization remain later phases.
+To change embedding models, set the matching supported model, immutable snapshot revision, version and dimensions; rebuild/recreate intelligence and Laravel services, then run `memory:reindex`. Fingerprint/profile matching excludes incompatible old vectors during rebuild; keyword retrieval remains available. Never just change dimension metadata on existing vectors. See [architecture](docs/architecture.md) and [ADR 0003](docs/decisions/0003-private-memory.md) for tradeoffs. Default mean-pooled embeddings and the English-focused model have relevance limitations; Phase 4 adds repository-aware chunking; advanced token optimization remains Phase 5.
 
 Full local transport/retrieval smoke check, with no paid inference:
 
@@ -156,4 +156,43 @@ This creates disposable smoke accounts and a project, tests real local embedding
 docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml run --rm --no-deps -e RUN_REAL_EMBEDDINGS=1 intelligence python -m pytest -q -p no:cacheprovider
 ```
 
-The normal API and React test commands remain unchanged. Phase 2 evidence is archived in [docs/history/phase-2.md](docs/history/phase-2.md). Phase 4 is not authorized.
+The normal API and React test commands remain unchanged. Phase 2 evidence is archived in [docs/history/phase-2.md](docs/history/phase-2.md). Phase 4 repository intelligence is implemented below; stop before unapproved Phase 5.
+
+## Phase 4: read-only repository intelligence
+
+Rebuild the stack and run the additive migration using the Phase 3 upgrade commands above. The stack adds a private `repository-worker` and retains existing data and localhost database access. No mounted repository is required to start the application.
+
+To enable indexing, an administrator must provision **sanitized, readable local Git checkouts** in a dedicated absolute host directory. Layout:
+
+```text
+/srv/assistant-repositories/
+  <project UUID>/
+    my-project/       # .git/ and allowed source files; no symlinked path components
+```
+
+Create the project in the UI first; its UUID appears in its URL. Provision/check out source yourself, without putting credentials in the directory. Existing Git commits are read, never created by the application. Grant container UID 10001 read/traverse permissions on this dedicated directory (avoid broad changes to home/project permissions). Set `REPOSITORY_HOST_ROOT=/srv/assistant-repositories` in root `.env`, or export it in the shell. This setting is a Docker host mount; `REPOSITORY_ROOT` is the internal Python mount path, not an API URL.
+
+Enable the opt-in read-only mount while preserving host database access:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml -f infrastructure/compose.repositories.yaml config --quiet
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml -f infrastructure/compose.repositories.yaml up -d
+```
+
+Keep these overrides on later startup/recreation commands. Base Compose exposes no host source directories. Only intelligence receives the mount; PHP/React/queue workers cannot read the filesystem directly. Remote cloning/URLs, external worktrees, submodules and symlink paths are unsupported. The administrator must keep each project's source in its own UUID directory; application owners cannot select another project's root.
+
+Open **Repository** from a project, or http://localhost:8080/projects/<project-uuid>/repository. Register name and relative path `my-project`, then choose the repository and **Index repository**. Registration/index/removal requires organization ownership plus project membership; authorized members can inspect/search shared project source. The screen polls job status, lists indexed files/languages/frameworks and offers code search with source lines. Removing an association deletes only database indexes, preserving mounted files. Current private conversation memories remain private.
+
+The indexer supports Tree-sitter Python, JavaScript/JSX, TypeScript/TSX and PHP, with explicit text fallback for other allowed source extensions. It excludes hidden/environment/credential/dependency/generated/binary files and obvious embedded secret patterns. Filters are defense in depth; mount sanitized source only. Bounds are 200 files, 128 KiB/file, 1 MiB source, 500 chunks, depth 20 and 10,000 directory entries. Oversize scans fail without replacing the previous index. A failed job shows a safe error; check permissions/Git HEAD/limits and explicitly index again. `repositories:recover` runs every minute and fails jobs stale for five minutes.
+
+Index again after source changes: unchanged compatible file hashes retain chunk IDs/embeddings, modified files are replaced, deleted files are removed. Reindex after embedding profile or parser changes; incompatible vectors are excluded until rebuilt, with lexical fallback available. Git HEAD is provenance; content hashes identify actual indexed workspace text, including uncommitted changes. Use a stable checkout for reproducible snapshots. Chat selects bounded relevant source as untrusted context and shows source links; modified/deleted chunk links can expire. Cloud processing must still be explicitly enabled for cloud chat. Indexing/search use local CPU embeddings and incur no cloud inference calls.
+
+Phase 5 (provider switching, Ollama, model-aware token optimization and usage/cost tracking) remains unapproved and unimplemented.
+
+For a full local source pipeline smoke check, first start with a dedicated **disposable** directory mounted through the repository override, then run:
+
+```sh
+python3 tests/repository_smoke.py --root /path/to/the/disposable-mounted-root
+```
+
+The script creates a new project UUID directory with synthetic source and Git HEAD metadata, exercises real read-only discovery/CPU embeddings/pgvector/incremental updates/project-directory denial, and removes only its newly created fixture/project. It never executes Git or calls cloud inference. Keep normal source provisioned separately. Previous transport/memory smoke tests remain `python3 tests/smoke.py --chat-fixture --memory`.

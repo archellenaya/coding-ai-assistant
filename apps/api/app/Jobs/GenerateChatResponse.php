@@ -11,6 +11,7 @@ use App\Services\Chat\ChatAccess;
 use App\Services\Chat\ChatService;
 use App\Services\Memory\MemoryContext;
 use App\Services\Memory\MemoryService;
+use App\Services\Repository\CodeContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +49,10 @@ class GenerateChatResponse implements ShouldQueue
             $used = array_sum(array_map(fn ($m) => mb_strlen($m['content']), $input));
             $memory = app(MemoryContext::class)->build($conversation, $owner, end($input)['content'], config('chat.max_input_chars') - $used);
             array_splice($input, count($input) - 1, 0, $memory['messages']);
-            $message->update(['memory_sources' => $memory['sources']]);
+            $used = array_sum(array_map(fn ($m) => mb_strlen($m['content']), $input));
+            $code = app(CodeContext::class)->build($conversation, $owner, end($input)['content'], config('chat.max_input_chars') - $used);
+            array_splice($input, count($input) - 1, 0, $code['messages']);
+            $message->update(['memory_sources' => $memory['sources'], 'code_sources' => $code['sources']]);
             $access->assertCanSend($conversation->fresh(), $owner);
             $completed = false;
             foreach ($provider->stream($input, $message->model, config('chat.max_output_tokens')) as $event) {

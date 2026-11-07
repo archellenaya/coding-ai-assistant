@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\MemoryController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\SummaryController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,14 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::post('memories/{memory}/reindex', [MemoryController::class, 'reindex']);
         Route::get('conversations/{conversation}/summary', [SummaryController::class, 'show']);
         Route::post('conversations/{conversation}/summary', [SummaryController::class, 'store'])->middleware('throttle:summary');
+        Route::get('projects/{project}/repositories', [RepositoryController::class, 'index']);
+        Route::post('projects/{project}/repositories', [RepositoryController::class, 'store']);
+        Route::post('projects/{project}/code/search', [RepositoryController::class, 'search'])->middleware('throttle:memory');
+        Route::get('repositories/{repository}', [RepositoryController::class, 'show']);
+        Route::delete('repositories/{repository}', [RepositoryController::class, 'destroy']);
+        Route::get('repositories/{repository}/files', [RepositoryController::class, 'files']);
+        Route::post('repositories/{repository}/index', [RepositoryController::class, 'enqueue'])->middleware('throttle:repository');
+        Route::get('code-chunks/{codeChunk}', [RepositoryController::class, 'chunk']);
         Route::get('models', [ConversationController::class, 'models']);
         Route::get('projects/{project}/conversations', [ConversationController::class, 'index']);
         Route::post('projects/{project}/conversations', [ConversationController::class, 'store']);

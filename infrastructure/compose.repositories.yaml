@@ -1,0 +1,12 @@
+# Explicit opt-in: mount only a dedicated directory of trusted, sanitized repositories.
+services:
+  intelligence:
+    environment:
+      REPOSITORY_ROOT: /repositories
+    volumes:
+      - type: bind
+        source: ${REPOSITORY_HOST_ROOT:?Set REPOSITORY_HOST_ROOT to a dedicated absolute directory}
+        target: /repositories
+        read_only: true
+        bind:
+          create_host_path: false

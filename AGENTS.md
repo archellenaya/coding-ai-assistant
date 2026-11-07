@@ -2,7 +2,7 @@
 
 Read `docs/master-specification.md` as the primary specification. At every session start read this file, `docs/architecture.md`, `docs/implementation-plan.md`, and `docs/progress.md`, then inspect the repository and read-only Git status.
 
-Phase 3 — Persistent Memory is authorized by the owner's explicit approval in this conversation. Phases 1, 2 and 3 are complete. Stop after Phase 3; Phase 4 requires explicit owner approval. Never stage, commit, push, tag, reset, rebase, or change Git history. Supply a Conventional Commit message for the owner.
+Phase 4 — Repository Intelligence is authorized by the owner's explicit approval in this conversation. Phases 1–4 are complete. Stop after Phase 4; Phase 5 requires explicit owner approval. Never stage, commit, push, tag, reset, rebase, or change Git history. Supply a Conventional Commit message for the owner.
 
 ## Engineering
 

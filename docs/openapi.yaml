@@ -2248,6 +2248,580 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project}/repositories": {
+      "get": {
+        "summary": "List project repositories",
+        "description": "Project-shared source only; private conversations/memories retain their existing creator policy.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Repository"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a local Git repository",
+        "description": "Relative path beneath administrator-mounted REPOSITORY_HOST_ROOT/<project UUID>/. Registration stores association only; explicit indexing validates Git/content. No clone, hooks, shell commands or filesystem writes. Maximum 10 repositories/project; duplicate path returns 409.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Repository"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 150
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "name",
+                  "path"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/repositories/{repository}": {
+      "get": {
+        "summary": "Read repository and latest indexing status",
+        "description": "Revision denotes Git HEAD while hashes identify actual workspace bytes, including uncommitted edits. Failed indexing keeps prior published snapshot.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Repository"
+                    },
+                    "job": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/IndexingJob"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove association and indexed source",
+        "description": "Cascade database files/chunks/jobs only; read-only source files are preserved. Cancels pending publication.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        }
+      }
+    },
+    "/api/v1/repositories/{repository}/files": {
+      "get": {
+        "summary": "List indexed repository files",
+        "description": "",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RepositoryFile"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          }
+        }
+      }
+    },
+    "/api/v1/repositories/{repository}/index": {
+      "post": {
+        "summary": "Queue incremental local indexing",
+        "description": "Returns same active job for duplicate requests; safe to poll repository status. Atomically publishes validated snapshot. Hash/parser/profile-compatible files retain chunk IDs; changed generations rebuild. Explicit retry after failure. Bounds: 200 files, 128 KiB/file, 1 MiB source, 500 chunks, 10,000 directory entries, depth 20.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IndexingJob"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        }
+      }
+    },
+    "/api/v1/code-chunks/{codeChunk}": {
+      "get": {
+        "summary": "Inspect indexed source reference",
+        "description": "Source is untrusted, not verified behavior. Changed/deleted chunk IDs expire. No embedding vectors or internal service tokens are exposed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "codeChunk",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CodeChunk"
+                    },
+                    "file": {
+                      "$ref": "#/components/schemas/RepositoryFile"
+                    },
+                    "repository": {
+                      "$ref": "#/components/schemas/Repository"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project}/code/search": {
+      "post": {
+        "summary": "Search authorized project source",
+        "description": "Top five deduplicated full-text, exact symbol and compatible pgvector cosine results with reciprocal rank fusion. Embedding errors explicitly degrade to lexical retrieval. No cloud permission is required for local search.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "chunk": {
+                            "$ref": "#/components/schemas/CodeChunk"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "retrieval": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "empty",
+                            "lexical",
+                            "hybrid"
+                          ]
+                        },
+                        "degraded": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current organization AND project membership required; configuration mutations also require organization ownership"
+          },
+          "404": {
+            "description": "Resource or source snapshot no longer exists"
+          },
+          "409": {
+            "description": "Duplicate registration, archived project or repository limit"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "API rate limited; search 20/min/user, indexing 5/min/user"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2542,6 +3116,15 @@
                 }
               }
             }
+          },
+          "code_sources": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CodeSource"
+            }
           }
         }
       },
@@ -2775,6 +3358,271 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "Repository": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 150
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parser_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "frameworks": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RepositoryFile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repository_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "parser": {
+            "type": "string",
+            "enum": [
+              "tree-sitter",
+              "text"
+            ]
+          },
+          "content_hash": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "IndexingJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repository_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "indexing",
+              "ready",
+              "failed"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stats": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "files": {
+                "type": "integer"
+              },
+              "changed": {
+                "type": "integer"
+              },
+              "unchanged": {
+                "type": "integer"
+              },
+              "deleted": {
+                "type": "integer"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CodeSource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repository_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "content_hash": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "start_line": {
+            "type": "integer"
+          },
+          "end_line": {
+            "type": "integer"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CodeChunk": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repository_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "content_hash": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "start_line": {
+            "type": "integer"
+          },
+          "end_line": {
+            "type": "integer"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repository_file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 3000
+          },
+          "profile": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "model": {
+            "type": "string"
+          },
+          "model_version": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "integer"
+          },
+          "artifact_fingerprint": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "pooling": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
           }
         }
       }

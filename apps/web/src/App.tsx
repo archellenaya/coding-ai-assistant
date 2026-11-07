@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, Link } from "react-router-dom";
 import { api, ApiError } from "./api";
 import ChatWorkspace from "./ChatWorkspace";
+import ProjectExplorer from "./ProjectExplorer";
 import MemoryExplorer from "./MemoryExplorer";
 type User = { id: string; name: string };
 type Organization = { id: string; name: string; role: string };
@@ -199,6 +200,7 @@ function Projects() {
             <div className="actions">
               <Link to={`/projects/${p.id}/chat`}>Open chat</Link>
               <Link to={`/projects/${p.id}/memories`}>Memory</Link>
+              <Link to={`/projects/${p.id}/repository`}>Repository</Link>
               <button onClick={() => setEditing(p)}>Edit</button>
               <button
                 onClick={() =>
@@ -306,6 +308,10 @@ export default function App() {
           <Route
             path="/projects/:projectId/memories"
             element={<MemoryExplorer />}
+          />
+          <Route
+            path="/projects/:projectId/repository"
+            element={<ProjectExplorer />}
           />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>

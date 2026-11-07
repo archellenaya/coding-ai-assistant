@@ -1,0 +1,11 @@
+# ADR 0004: constrained repository snapshots and project source retrieval
+
+Status: accepted for explicitly approved Phase 4.
+
+Use administrator-provisioned local repositories under a per-project UUID namespace, mounted read-only only in Python. Registration stores relative associations, never clones URLs or runs Git/source commands. Descriptor-relative no-follow reads prevent path/symlink escapes. The project's existing ownership policy controls registration/index/removal; both memberships control shared source reads. Existing private chat/memory ownership is unchanged.
+
+Python supplies bounded workspace files, hashes, Git HEAD, detection and Tree-sitter chunks. Laravel validates the snapshot and owns durable indexing/retrieval. Queue jobs are transactional, idempotent while active, and publish under job/repository locks only after current authorization checks. Prepare changed embeddings outside the transaction, atomically swap changed files and remove deleted files, retaining compatible unchanged IDs. Failures preserve the previous complete snapshot; stale work cannot publish after recovery/removal.
+
+Reuse Phase 3 local EmbeddingProvider and explicit vector profiles. Code vectors carry model/version/dimensions/pooling/fingerprint and use guarded compatible cosine search. Fuse lexical, exact symbol and vector candidates with project filters. Treat all source as untrusted; preserve whole selected chunks and immutable-at-publication hashes/line/Git references in chat. Changed chunks expire rather than rendering different source under an old ID.
+
+Tradeoffs: small bounded repositories, English-focused baseline embeddings, exact vector search, explicit manual indexing, heuristic frameworks and no universal secret-detection guarantee. Uncommitted workspace files can differ from HEAD and concurrent edits are not an atomic filesystem snapshot. Only five grammar variants have symbol support; other approved text extensions use explicit fallback. Remote cloning, external worktrees/submodules, arbitrary execution, model-aware budgets and provider routing are deferred. Administrators provision stable sanitized project directories; they must not mount home directories or credentials.

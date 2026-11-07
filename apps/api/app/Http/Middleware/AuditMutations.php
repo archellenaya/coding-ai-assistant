@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Project;
+use App\Models\Repository;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,9 @@ class AuditMutations
             $response = $next($request);
             if ($response->isSuccessful()) {
                 $project = $request->route('project');
+                if (! $project && $request->route('repository') instanceof Repository) {
+                    $project = $request->route('repository')->project;
+                }
                 DB::table('audit_events')->insert(['id' => (string) Str::uuid(), 'user_id' => $actor ?? Auth::guard('web')->id(), 'action' => $request->method().' '.$request->route()->uri(), 'project_id' => $project instanceof Project ? $project->id : null, 'created_at' => now()]);
             }
 

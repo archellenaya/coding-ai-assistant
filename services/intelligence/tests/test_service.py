@@ -67,3 +67,28 @@ def test_real_cpu_model_retrieves_paraphrased_debugging_history():
     assert abs(np.linalg.norm(query) - 1) < 1e-5
     assert query @ fix > query @ unrelated + 0.05
     assert len(engine.fingerprint) == 64
+    code_query, source, unrelated_code = np.array(engine.embed([
+        'Which function refreshes an expired authentication session?',
+        'File: auth.py\nSymbol: renew_session\ndef renew_session(user):\n    """Refresh expired authentication credentials."""\n    return user.refresh_access_token()',
+        'File: cake.py\nSymbol: bake_cake\ndef bake_cake(flour):\n    return oven.bake(flour)',
+    ]))
+    assert code_query @ source > code_query @ unrelated_code + 0.05
+
+
+def test_repository_endpoint_authentication_and_sanitized_failures(tmp_path, monkeypatch):
+    from test_repository import repository
+    project_id = "11111111-1111-4111-8111-111111111111"
+    project_root = tmp_path / project_id
+    project_root.mkdir()
+    repository(project_root)
+    monkeypatch.setenv('REPOSITORY_ROOT', str(tmp_path))
+    with TestClient(create_app(FakeEngine, token='secret')) as client:
+        assert client.post('/v1/repositories/snapshot', json={'path': 'repo', 'project_id': project_id}).status_code == 401
+        headers = {'Authorization': 'Bearer secret'}
+        response = client.post('/v1/repositories/snapshot', json={'path': 'repo', 'project_id': project_id}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()['files'][0]['chunks'][0]['symbol'] == 'renew_session'
+        rejected = client.post('/v1/repositories/snapshot', json={'path': '../private', 'project_id': project_id}, headers=headers)
+        assert rejected.status_code == 422
+        assert str(tmp_path) not in rejected.text
+        assert '../private' not in rejected.text

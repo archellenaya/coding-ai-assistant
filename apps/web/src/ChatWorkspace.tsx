@@ -15,6 +15,12 @@ type Message = {
   model: string | null;
   attempt: number;
   error_code: string | null;
+  code_sources?: {
+    id: string;
+    path: string;
+    start_line: number;
+    end_line: number;
+  }[];
   memory_sources?: { id: string; revision: number }[];
   usage: { input_tokens?: number; output_tokens?: number } | null;
 };
@@ -356,6 +362,19 @@ function ConversationChat({
                 {message.model} · {message.status} · Attempt {message.attempt}
                 {message.usage &&
                   ` · ${message.usage.input_tokens ?? "?"} input / ${message.usage.output_tokens ?? "?"} output tokens`}
+              </p>
+            )}
+            {message.code_sources && message.code_sources.length > 0 && (
+              <p>
+                Code sources:{" "}
+                {message.code_sources.map((source) => (
+                  <Link
+                    key={source.id}
+                    to={`/projects/${project.id}/repository?chunk=${source.id}`}
+                  >
+                    {source.path}:{source.start_line}–{source.end_line}{" "}
+                  </Link>
+                ))}
               </p>
             )}
             {message.memory_sources && message.memory_sources.length > 0 && (

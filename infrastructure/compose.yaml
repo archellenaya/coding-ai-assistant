@@ -31,6 +31,13 @@ services:
       redis: {condition: service_healthy}
       intelligence: {condition: service_healthy}
     command: [php, artisan, queue:work, database, --queue=memory, --tries=1, --timeout=150]
+  repository-worker:
+    <<: *api
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      intelligence: {condition: service_healthy}
+    command: [php, artisan, queue:work, database, --queue=repository, --tries=1, --timeout=150]
   summary-worker:
     <<: *api
     networks: [backend, egress]
