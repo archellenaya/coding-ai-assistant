@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Coding AI Assistant \u2014 Phase 1",
-    "version": "1.0.0",
-    "description": "Same-origin Sanctum cookie sessions. Obtain CSRF cookie, send allowed Origin/Referer and X-XSRF-TOKEN for mutations. Password minimum 12 characters. Lists use Laravel pagination. No AI endpoints."
+    "title": "Coding AI Assistant \u2014 Phases 1\u20132",
+    "version": "2.0.0",
+    "description": "Same-origin Sanctum cookie sessions with CSRF for mutations. Private project-scoped conversations, durable queued inference and resumable SSE. Configure model and credentials on server; cloud processing defaults to disabled."
   },
   "servers": [
     {
@@ -699,6 +699,744 @@
           }
         ]
       }
+    },
+    "/api/v1/models": {
+      "get": {
+        "summary": "Configured cloud model catalog",
+        "description": "No credentials are exposed. Empty catalog when no model is configured; available false when key absent.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AIModel"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/api/v1/projects/{project}/conversations": {
+      "get": {
+        "summary": "List own conversations in authorized project",
+        "description": "Title search with literal wildcard escaping; 20 items per page.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Conversation"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string",
+              "maxLength": 150
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create private conversation",
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          },
+          "419": {
+            "description": "Missing/invalid CSRF session/token"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 150
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation}": {
+      "get": {
+        "summary": "Read own conversation",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Rename own conversation",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          },
+          "419": {
+            "description": "Missing/invalid CSRF session/token"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 150
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete own inactive conversation and its messages",
+        "description": "",
+        "responses": {
+          "204": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          },
+          "419": {
+            "description": "Missing/invalid CSRF session/token"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/conversations/{conversation}/messages": {
+      "get": {
+        "summary": "Resume ordered persisted message history",
+        "description": "50 messages/page; Phase 2 caps conversations at 20 user turns.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Persist prompt and queue assistant response",
+        "description": "Same UUID and same input return original assistant without another job. Different input with same key returns 409. Requires cloud permission and configured model, including worker rechecks.",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          },
+          "419": {
+            "description": "Missing/invalid CSRF session/token"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "content",
+                  "model",
+                  "idempotency_key"
+                ],
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 12000
+                  },
+                  "model": {
+                    "type": "string",
+                    "maxLength": 150
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation}/messages/{message}/retry": {
+      "post": {
+        "summary": "Explicitly retry latest failed assistant response",
+        "description": "Supply failed attempt number. Repeated requests return newer attempt without another job. Maximum 3 attempts; retries may incur a second provider charge.",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          },
+          "419": {
+            "description": "Missing/invalid CSRF session/token"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "attempt"
+                ],
+                "properties": {
+                  "attempt": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation}/messages/{message}/stream": {
+      "get": {
+        "summary": "Stream/replay saved current-attempt response events",
+        "description": "Authenticated read-only SSE. reset {attempt}, delta {text}, completed {usage}, failed {code,message} have persisted id cursors. end {} closes terminal stream. Comments are heartbeat. Reconnect after bounded 20-second window; Last-Event-ID overrides after. Reads only current attempt and rechecks authorization per poll. No inference is started by GET.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "id: 42\nevent: delta\ndata: {\"text\":\"Hello\"}\n\n"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Conversation ownership/project membership/cloud permission required"
+          },
+          "404": {
+            "description": "Resource not found or message belongs to another conversation"
+          },
+          "409": {
+            "description": "Active response, archived project, changed idempotent input, or invalid retry state"
+          },
+          "422": {
+            "description": "Validation, model, cursor, retry or input/turn limit failed"
+          },
+          "429": {
+            "description": "API rate limit; sends/retries limited to 10/minute per user"
+          },
+          "503": {
+            "description": "Provider key/model not configured"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -847,6 +1585,168 @@
             "enum": [
               "owner",
               "member"
+            ]
+          }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "streaming",
+              "completed",
+              "failed"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "reply_to_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_response_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "input_tokens": {
+                "type": "integer"
+              },
+              "output_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "AIModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "context_window": {
+            "type": "integer",
+            "description": "Configured metadata, 0 means unspecified"
+          },
+          "max_output_tokens": {
+            "type": "integer"
+          },
+          "input_price_per_million": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "output_price_per_million": {
+            "type": [
+              "string",
+              "number",
+              "null"
             ]
           }
         }

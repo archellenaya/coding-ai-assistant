@@ -1,0 +1,8 @@
+# Optional access for database clients running on the Docker host.
+services:
+  postgres:
+    networks: [backend, database_access]
+    ports:
+      - "127.0.0.1:${DB_FORWARD_PORT:-5432}:5432"
+networks:
+  database_access:

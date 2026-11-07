@@ -2,13 +2,13 @@
 
 Read `docs/master-specification.md` as the primary specification. At every session start read this file, `docs/architecture.md`, `docs/implementation-plan.md`, and `docs/progress.md`, then inspect the repository and read-only Git status.
 
-Only Phase 1 is authorized. Stop at its completion. Phase 2 requires explicit owner approval, regardless of files already present. Never stage, commit, push, tag, reset, rebase, or change Git history. Supply a Conventional Commit message for the owner.
+Phase 2 — AI Chat is authorized by the owner's explicit approval in this conversation. Phases 1 and 2 are complete. Stop after Phase 2; Phase 3 requires explicit owner approval. Never stage, commit, push, tag, reset, rebase, or change Git history. Supply a Conventional Commit message for the owner.
 
 ## Engineering
 
 - Preserve working functionality; use SOLID, DRY, KISS and Laravel conventions.
 - Laravel owns authentication, authorization and business rules. React and the future extension share its `/api/v1` API. Python handles future intelligence processing only.
-- All project reads require both organization and project membership; mutations require organization ownership. Enforce policies server-side and filter listings before pagination.
+- All project reads require both organization and project membership; project configuration mutations require organization ownership. Conversation access requires project membership and conversation ownership; chat mutations do not grant project-administration rights. Enforce policies server-side and filter listings before pagination.
 - Public resources use UUIDs. Use transactions, foreign keys, constraints and indexes.
 - Never commit secrets, expose provider credentials, execute generated commands, deploy automatically, or perform destructive operations without explicit authorization.
 - Use Sanctum cookie authentication and CSRF for the SPA. Do not store browser tokens. Default cloud processing to false.

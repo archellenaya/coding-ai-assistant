@@ -6,3 +6,7 @@
 !.env.example
 **/*.sqlite
 **/coverage/
+
+# Python tooling artifacts
+**/__pycache__/
+*.pyc

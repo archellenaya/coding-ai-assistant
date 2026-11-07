@@ -22,7 +22,8 @@ services:
       retries: 5
   worker:
     <<: *api
-    command: [php, artisan, queue:work, --tries=3, --timeout=90]
+    networks: [backend, egress]
+    command: [php, artisan, queue:work, database, --queue=chat, --tries=1, --timeout=150]
   scheduler:
     <<: *api
     command: [php, artisan, schedule:work]
@@ -59,6 +60,7 @@ services:
       retries: 10
 networks:
   edge:
+  egress:
   backend:
     internal: true
 volumes:

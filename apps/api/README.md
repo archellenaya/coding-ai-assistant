@@ -1,3 +1,3 @@
 # Laravel API
 
-See the [root setup guide](../../README.md), [architecture](../../docs/architecture.md), and [OpenAPI](../../docs/openapi.yaml). Only Phase 1 is implemented.
+See the [root setup guide](../../README.md), [architecture](../../docs/architecture.md), and [OpenAPI](../../docs/openapi.yaml). Phases 1 and 2 are implemented. Provider calls run in the database chat queue; see the root setup guide for configuration.

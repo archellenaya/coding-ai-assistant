@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, Link } from "react-router-dom";
 import { api, ApiError } from "./api";
+import ChatWorkspace from "./ChatWorkspace";
 type User = { id: string; name: string };
 type Organization = { id: string; name: string; role: string };
 type Project = {
@@ -195,6 +196,7 @@ function Projects() {
               {p.cloud_processing_allowed ? "allowed" : "disabled"}
             </p>
             <div className="actions">
+              <Link to={`/projects/${p.id}/chat`}>Open chat</Link>
               <button onClick={() => setEditing(p)}>Edit</button>
               <button
                 onClick={() =>
@@ -298,6 +300,7 @@ export default function App() {
         {logout.error && <p role="alert">{logout.error.message}</p>}
         <Routes>
           <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:projectId/chat" element={<ChatWorkspace />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </main>

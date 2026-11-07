@@ -4,185 +4,170 @@ Last updated: 2026-11-07 (Asia/Singapore).
 
 ## Current phase and approval
 
-- Current phase: **Phase 1 — Foundation**.
+- Current phase: **Phase 2 — AI Chat**.
 - Status: **Completed**; awaiting owner review and manual commit.
-- Authorized scope: Phase 1 only, explicitly authorized in the current request.
-- Phase 2 approval: **Not granted**. No Phase 2 work has begun.
-- Git actions: read-only inspection only; nothing staged, committed, tagged or pushed.
+- Approval: owner explicitly replied **“yes”** to the Phase 2 approval question in this conversation. That authorization supersedes the former Phase 1-only guidance.
+- Phase 1: completed and manually committed by the owner (`eabb5dd`). Its full progress/test record is preserved in [history/phase-1.md](history/phase-1.md).
+- Phase 3: **Not approved; not started**.
+- Git actions: read-only inspection only. Nothing staged, committed, pushed, tagged or reset by the assistant.
 
-## Repository assessment
+## Repository review
 
-The repository initially contained only `docs/master-specification.md`, with a clean Git status and no application code. There was no prior implemented phase. The master specification is preserved unchanged.
+Started from a clean working tree containing the committed Phase 1 Laravel/Sanctum API, React project dashboard, PostgreSQL/pgvector, Redis and local Docker stack. No conversations, provider adapter or AI chat UI existed. Preserved authentication/project behavior and ran its regression tests with the new suite. `docs/master-specification.md` is unchanged.
 
-## Completed
+## Completed functionality
 
-- Initialized modular monorepo and locked Laravel 12/Sanctum and React/TypeScript/Vite dependencies.
-- Implemented browser registration, login, logout and current-user endpoints with CSRF, session rotation/invalidation, password validation/hashing and auth/API rate limits.
-- Atomic personal organization provisioning, owner/member role constraints and project membership.
-- UUID public identifiers; relational constraints/cascades and project listing index.
-- Project create/list/read/update, archive/restore, permanent delete and cloud-permission setting (default false).
-- Server-side policies and listing filters enforce both organization and project membership; writes require ownership. Tenant reassignment is excluded from validated updates.
-- Audit records for successful mutations without logging bodies, passwords or tokens.
-- Responsive SPA with auth forms, project form/cards, pagination, loading/error states, edit/archive/restore/cloud controls, and delete confirmation.
-- Docker PHP-FPM API, worker, scheduler, Nginx/static SPA, PostgreSQL 17/pgvector 0.8.1 and Redis; private backend network, loopback-only web port, persistent volumes and health checks.
-- Environment examples, setup guide, architecture, phased plan, agent guidance, decision record and OpenAPI 3.1 contract.
-- API feature tests, React interaction tests and a real HTTP smoke script with CSRF enabled.
-- Container-test safeguards: force isolated cache/session/queue configuration, reject DB_URL, require in-memory SQLite or a PostgreSQL database ending in `_test`, and use a writable PHPUnit cache.
+- Injected `LLMProvider` interface, provider event/error types and a real OpenAI Responses streaming adapter using Laravel HTTP/Guzzle. Fixed HTTPS endpoint, bounded SSE parsing, no redirects, server-only key, `store: false`, no tools and no automatic paid retries.
+- Configurable model identifier, text/streaming capability catalog, context/pricing metadata, output-token cap and input-character cap. No model name, pricing or live key is hardcoded. Missing configuration disables cloud sends with a safe error.
+- UUID conversations and messages; ordered user/assistant pairs, statuses, request keys, reply foreign key, attempts, usage metadata, provider response identifier and attempt-specific persisted stream events.
+- Private conversations scoped to their creator and current organization/project membership; create/list/title-search/read/rename/delete and ordered persisted message history. Lists paginate. Members may use their own chats; only project owners alter privacy settings.
+- Idempotent send, one active response per conversation, serialized submission/deletion, atomic prompt/response/event/database-job commit. Queue failure rolls back all records.
+- Worker claims and rechecks privacy/membership/model before inference; only completed pairs plus current prompt form context. Partial output survives failure. Duplicate/stale jobs cannot execute a newer attempt.
+- Explicit, bounded retry of only the latest failed response, keyed by failed attempt number. Retrying an already retried attempt returns the new state without adding a job. Three-attempt cap; no fallback/routing or automatic cloud replay.
+- Authenticated SSE with Last-Event-ID/after cursor replay, per-poll reauthorization, heartbeats and bounded connection windows. Streams serve only the current attempt, preventing an old failed event from terminating a retried response. Browser disconnects do not cancel durable work.
+- Worker timeout 150 seconds, database queue visibility 210 seconds; scheduled `chat:recover` fails work stale for five minutes without another provider call.
+- React project chat navigation, private conversation history/title search/pagination, model selection, streamed output, reconnect, rename/delete, retry and token metadata. Prism React tokens highlight fenced code; all other output remains escaped text.
+- Privacy/archived/model/input/turn/rate/output/retry controls. No repository reads, code execution, file editing or claims of verified solutions. Prompt whitespace is preserved explicitly.
+- Worker-only Docker egress, database chat queue command and nonbuffered Nginx SSE configuration with dynamic Docker DNS for recreated API containers. Internal database/Redis/API services remain unpublished.
+- Updated architecture, plan, AGENTS, setup, OpenAPI and ADR 0002. Archived Phase 1 evidence without changing the master specification.
 
-## Tests and validation executed
+## Tests executed and final results
 
-All final commands below succeeded. Commands run from repository root unless a directory is specified.
+All final checks below succeeded. Root commands unless a `cd` is shown. External provider calls in tests are mocked; no paid model call was made.
 
 | Exact command | Final result |
 |---|---|
-| `cd apps/api && php artisan test` | 7 tests passed, 59 assertions (SQLite) |
+| `cd apps/api && php artisan test --compact` | **23 tests passed, 175 assertions**, SQLite |
 | `cd apps/api && vendor/bin/pint --test` | Passed |
-| `cd apps/api && composer validate --strict` | Valid manifest and lockfile |
-| `cd apps/web && npm run build` | TypeScript check and Vite production build passed |
-| `cd apps/web && npm test` | 3 React interaction tests passed |
-| `cd apps/web && npm run lint` | Passed (Oxlint) |
+| `cd apps/api && composer validate --strict` | Manifest and lockfile valid |
+| `cd apps/web && npm run build` | TypeScript and Vite production build passed |
+| `cd apps/web && npm test` | **8 tests passed** across 2 files |
+| `cd apps/web && npm run lint` | Passed without warnings |
 | `cd apps/web && npx prettier --check 'src/*.{ts,tsx,css}' '*.{ts,json}'` | Passed |
-| `docker compose --env-file .env -f infrastructure/compose.yaml config --quiet` | Valid Compose configuration |
-| `docker compose --env-file .env -f infrastructure/compose.yaml build` | All four application images built |
-| `docker compose --env-file .env -f infrastructure/compose.yaml up -d postgres redis` | Dependencies started and healthy |
-| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm api php artisan migrate --force` | All six migrations applied successfully to new PostgreSQL development database |
-| `docker compose --env-file .env -f infrastructure/compose.yaml exec -T postgres createdb -U coding_assistant coding_assistant_test` | Separate disposable integration database created |
-| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm -T -e APP_ENV=testing -e DB_CONNECTION=pgsql -e DB_DATABASE=coding_assistant_test -e DB_URL= api php artisan test` | 7 tests passed, 59 assertions, no warnings |
-| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm -T -e APP_ENV=testing -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e DB_URL= api php artisan test` | 7 tests passed, 59 assertions, no warnings |
-| `docker compose --env-file .env -f infrastructure/compose.yaml up -d` | Local application started |
-| `python3 tests/smoke.py` | Real HTTP health/SPA, CSRF rejection, registration, session auth, project CRUD/archive, tenant isolation and logout/login passed |
-| `docker compose --env-file .env -f infrastructure/compose.yaml ps` | All six services running; API, web, PostgreSQL and Redis healthy |
-| `python3 -m json.tool docs/openapi.yaml > /dev/null` | OpenAPI JSON-form YAML parses successfully; no full external OpenAPI linter run |
-| `git diff --check` | Passed; original tracked specification unchanged |
+| `docker compose --env-file .env -f infrastructure/compose.yaml config --quiet` | Valid configuration |
+| `docker compose --env-file .env -f infrastructure/compose.yaml build` | API, worker, scheduler and web images built |
+| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm api php artisan migrate --force` | Additive Phase 2 migration applied successfully; existing development data preserved |
+| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm -T -e APP_ENV=testing -e DB_CONNECTION=pgsql -e DB_DATABASE=coding_assistant_test -e DB_URL= api php artisan test --compact` | **23 tests passed, 175 assertions**, PostgreSQL |
+| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm -T -e APP_ENV=testing -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e DB_URL= api php artisan test --compact` | **23 tests passed, 175 assertions**, container SQLite |
+| `docker compose --env-file .env -f infrastructure/compose.yaml up -d` | Local application services started |
+| `python3 tests/smoke.py --chat-fixture` | Real HTTP health/SPA, CSRF/auth, project/conversation CRUD, empty search, cloud denial, tenant isolation, logout/login and persisted SSE replay through Nginx passed; explicitly labeled local CLI fixture, no inference |
+| `docker compose --env-file .env -f infrastructure/compose.yaml ps` | All 6 services running; API, web, PostgreSQL and Redis healthy |
+| `docker compose --env-file .env -f infrastructure/compose.yaml build web` | Final dynamic-DNS proxy image built |
+| `docker compose --env-file .env -f infrastructure/compose.yaml run --rm --no-deps web nginx -t` | Nginx syntax/configuration passed |
+| `docker compose --env-file .env -f infrastructure/compose.yaml up -d --force-recreate api` | API-only recreation; proxy was not restarted |
+| `python3 tests/check_local_health.py` | Nginx and Laravel returned HTTP 200 after API recreation; full fixture smoke rerun passed afterward |
+| `python3 tests/check_openapi.py` | **22 documented operations** match Laravel routes; all local schema references resolve |
+| `python3 -m json.tool docs/openapi.yaml > /dev/null` | Contract parses as JSON-form YAML; no full external OpenAPI schema linter claimed |
+| `python3 -m py_compile tests/smoke.py` | Smoke script compiles |
+| `php -l tests/fixtures/chat-stream.php` | PHP fixture syntax valid |
+| `git diff --check` | Passed |
 
-The database extension was independently queried with `psql`: `SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';` returned `vector | 0.8.1`.
+Coverage includes Phase 1 regressions, conversation privacy (including same-project other users), cross-resource stream rejection, cloud/model/archive limits, exactly-one queued prompt for repeated request keys, changed-input conflicts, busy response protection, atomic queue failure rollback, actual serialized queue-worker execution, persisted deltas/usage, stream cursors, retry attempt isolation, stale recovery, completed-only ordered context, malformed/incomplete/rate-limited provider errors, fragmented Unicode/multiline SSE, frame bounds, prompt whitespace, and literal/empty title search. React tests cover streaming, transport reconnect cleanup, cloud denial, retained request key after uncertain send failure and escaped/highlighted output.
 
-Intermediate failures were fixed: explicit web guard selection, serialized default project permission, test-origin/session handling, React test hook cleanup, Docker environment precedence affecting throttles, absent dotenv warning, and writable PHPUnit cache. Final suites above were rerun after fixes. No external AI calls occurred.
+Intermediate failures were fixed and rerun: missing in-memory default attempt, a PHPUnit helper method name collision, retry replay including old attempt events, TypeScript's prohibition on parameter properties, a React lint warning, PostgreSQL self-reference constraint order, empty search validation and default string trimming of code, and stale Nginx DNS causing a 502 after API recreation. No unresolved final test failures remain.
 
-## Remaining tasks and known limitations
+## Known issues and limits
 
-- No remaining Phase 1 implementation tasks. Owner review and manual commit remain pending.
-- Local stack is available at http://localhost:8080. Runtime smoke checks create disposable test accounts; their test projects are deleted. A separate integration test database remains for future checks. Generated local `.env` credentials are ignored by Git.
-- Organization invitations/administration and project membership-management screens are not part of basic Phase 1; registration provisions a personal organization. Policies and database membership support are implemented and tested.
-- No AI, conversations, repository indexing/association, intelligence service, Ollama, embeddings, extension token issuance or VS Code functionality. Reserved directories contain explicit scope notes only.
-- Production TLS, secret provisioning, least-privilege database roles, security/performance evaluation, retention administration, backups and monitoring remain future hardening work. Local Compose is not a production release.
-- Browser interaction tests use a mocked API. The HTTP smoke test exercises the actual Nginx/PHP/PostgreSQL/Redis stack; no automated real-browser visual test was run.
+- Live OpenAI generation was **not** run: no owner-supplied API key/model was configured. The adapter is implemented and tested using mocked HTTP; real SSE transport was checked separately using a clearly identified persisted fixture. Configure `OPENAI_API_KEY` and `OPENAI_MODEL` before live use. No claim of live account/model availability or paid inference success is made.
+- No real-browser automation/visual evaluation was run. UI interactions use a mocked API; real HTTP checks cover Laravel/Nginx/PostgreSQL/Redis and saved stream replay.
+- Input limits are conservative character/turn bounds, not model-aware token budgeting. Provider context/output errors are safe failures. Model-aware ContextBuilder, financial budgets, cost ledgers, fallback and multiple adapters remain Phase 5.
+- Explicit retries may incur another charge after a worker/network interruption; exactly-once provider inference is not guaranteed. Recovery requires the scheduler, and inference requires the database chat worker. Use the application's default database connection for the transactional queue.
+- Conversation search currently searches titles. Summaries, persistent memories and embeddings are Phase 3 and are not implemented.
+- Production TLS, least-privilege database roles, backups, retention administration, monitoring and scale/security evaluation remain Phase 8. The local-only HTTP fixture is a CLI test helper, not an application endpoint or a generated AI answer.
+- Local stack remains available at http://localhost:8080. Smoke accounts remain as disposable development data; smoke conversations and projects are deleted. The separate `_test` database remains for future validation. Secrets and generated artifacts remain ignored.
 
 ## Architectural decisions
 
-See `docs/decisions/0001-foundation.md`: same-origin Sanctum sessions, Laravel business/authorization ownership, explicit organization AND project membership, UUIDs, pgvector now with embeddings deferred, phase-owned migrations, and no dormant future services. `docs/architecture.md` records the future embedding-model reindexing strategy.
+See [ADR 0002](decisions/0002-durable-chat.md): creator-private conversations, fixed-endpoint injected provider, PostgreSQL transactional chat queue, per-conversation locking, attempt-scoped durable SSE, explicit retry and bounded recovery. Official OpenAI streaming references are linked from architecture.md. No further development phase was started.
 
 ## Files changed
 
-All application/documentation files below are additions. No pre-existing tracked files were changed or deleted. Generated dependency/build/runtime files and secrets are ignored.
+Modified:
 
-- `.dockerignore`
 - `.env.example`
 - `.gitignore`
 - `AGENTS.md`
 - `README.md`
-- `apps/api/.editorconfig`
 - `apps/api/.env.example`
-- `apps/api/.gitattributes`
-- `apps/api/.gitignore`
 - `apps/api/README.md`
-- `apps/api/app/Http/Controllers/AuthController.php`
-- `apps/api/app/Http/Controllers/Controller.php`
-- `apps/api/app/Http/Controllers/ProjectController.php`
-- `apps/api/app/Http/Middleware/AuditMutations.php`
-- `apps/api/app/Models/Organization.php`
-- `apps/api/app/Models/Project.php`
-- `apps/api/app/Models/User.php`
-- `apps/api/app/Policies/ProjectPolicy.php`
 - `apps/api/app/Providers/AppServiceProvider.php`
-- `apps/api/artisan`
 - `apps/api/bootstrap/app.php`
-- `apps/api/bootstrap/cache/.gitignore`
-- `apps/api/bootstrap/providers.php`
-- `apps/api/composer.json`
-- `apps/api/composer.lock`
-- `apps/api/config/app.php`
-- `apps/api/config/auth.php`
-- `apps/api/config/cache.php`
-- `apps/api/config/database.php`
-- `apps/api/config/filesystems.php`
-- `apps/api/config/logging.php`
-- `apps/api/config/mail.php`
 - `apps/api/config/queue.php`
-- `apps/api/config/sanctum.php`
-- `apps/api/config/services.php`
-- `apps/api/config/session.php`
-- `apps/api/database/.gitignore`
-- `apps/api/database/factories/UserFactory.php`
-- `apps/api/database/migrations/0001_01_01_000000_create_users_table.php`
-- `apps/api/database/migrations/0001_01_01_000001_create_cache_table.php`
-- `apps/api/database/migrations/0001_01_01_000002_create_jobs_table.php`
-- `apps/api/database/migrations/2026_11_06_232108_create_personal_access_tokens_table.php`
-- `apps/api/database/migrations/2026_11_07_000001_create_foundation.php`
-- `apps/api/database/migrations/2026_11_07_000002_create_audit_events.php`
-- `apps/api/database/seeders/DatabaseSeeder.php`
-- `apps/api/phpunit.xml`
-- `apps/api/public/.htaccess`
-- `apps/api/public/favicon.ico`
-- `apps/api/public/index.php`
-- `apps/api/public/robots.txt`
 - `apps/api/routes/api.php`
 - `apps/api/routes/console.php`
-- `apps/api/routes/web.php`
-- `apps/api/storage/app/.gitignore`
-- `apps/api/storage/app/private/.gitignore`
-- `apps/api/storage/app/public/.gitignore`
-- `apps/api/storage/framework/.gitignore`
-- `apps/api/storage/framework/cache/.gitignore`
-- `apps/api/storage/framework/cache/data/.gitignore`
-- `apps/api/storage/framework/sessions/.gitignore`
-- `apps/api/storage/framework/testing/.gitignore`
-- `apps/api/storage/framework/views/.gitignore`
-- `apps/api/storage/logs/.gitignore`
-- `apps/api/tests/Feature/ExampleTest.php`
-- `apps/api/tests/Feature/FoundationTest.php`
-- `apps/api/tests/TestCase.php`
-- `apps/web/.gitignore`
-- `apps/web/.oxlintrc.json`
-- `apps/web/index.html`
 - `apps/web/package-lock.json`
 - `apps/web/package.json`
-- `apps/web/src/App.test.tsx`
 - `apps/web/src/App.tsx`
-- `apps/web/src/api.ts`
-- `apps/web/src/index.css`
-- `apps/web/src/main.tsx`
-- `apps/web/src/test-setup.ts`
-- `apps/web/tsconfig.app.json`
-- `apps/web/tsconfig.json`
-- `apps/web/tsconfig.node.json`
-- `apps/web/vite.config.ts`
-- `apps/web/vitest.config.ts`
 - `docs/architecture.md`
-- `docs/decisions/0001-foundation.md`
 - `docs/implementation-plan.md`
 - `docs/openapi.yaml`
 - `docs/progress.md`
-- `extensions/vscode/README.md`
 - `infrastructure/compose.yaml`
-- `infrastructure/docker/api.Dockerfile`
 - `infrastructure/docker/nginx.conf`
-- `infrastructure/docker/web.Dockerfile`
-- `services/intelligence/README.md`
 - `tests/smoke.py`
+
+Added:
+
+- `apps/api/app/Console/Commands/RecoverChatResponses.php`
+- `apps/api/app/Contracts/LLMProvider.php`
+- `apps/api/app/Http/Controllers/ConversationController.php`
+- `apps/api/app/Jobs/GenerateChatResponse.php`
+- `apps/api/app/Models/Conversation.php`
+- `apps/api/app/Models/Message.php`
+- `apps/api/app/Models/MessageEvent.php`
+- `apps/api/app/Policies/ConversationPolicy.php`
+- `apps/api/app/Services/AI/OpenAIProvider.php`
+- `apps/api/app/Services/AI/ProviderEvent.php`
+- `apps/api/app/Services/AI/ProviderException.php`
+- `apps/api/app/Services/AI/SseDecoder.php`
+- `apps/api/app/Services/Chat/ChatAccess.php`
+- `apps/api/app/Services/Chat/ChatService.php`
+- `apps/api/config/chat.php`
+- `apps/api/database/migrations/2026_11_07_000003_create_chat_tables.php`
+- `apps/api/tests/Feature/ChatTest.php`
+- `apps/web/src/ChatWorkspace.test.tsx`
+- `apps/web/src/ChatWorkspace.tsx`
+- `apps/web/src/MessageContent.tsx`
+- `docs/decisions/0002-durable-chat.md`
+- `docs/history/phase-1.md`
+- `tests/check_local_health.py`
+- `tests/check_openapi.py`
+- `tests/fixtures/chat-stream.php`
+
+Deleted: none. Existing Phase 1 behavior and the master specification are preserved.
 
 ## Suggested Git commit message
 
 ```text
-feat(phase-1): build authenticated project management foundation
+feat(phase-2): add private persistent AI chat with resumable streaming
 
-- Initialize Laravel Sanctum API and React TypeScript workspace
-- Add organization isolation, project policies, CRUD and audit records
-- Configure PostgreSQL pgvector, Redis and local Docker services
-- Add API, UI and HTTP tests with isolated database safeguards
-- Document architecture, setup, API contract and phased progress
+- Add an injected OpenAI Responses provider and configurable model catalog
+- Persist conversations, idempotent turns, attempts and replayable SSE events
+- Queue inference atomically with privacy checks and explicit retry recovery
+- Build React chat history, model selection and safe code highlighting
+- Add provider, queue, isolation, UI and HTTP streaming tests
+- Update architecture, setup, OpenAPI and phase progress documentation
 ```
 
-## Next planned phase
+## Remaining tasks and next approval
 
-Phase 2 — AI Chat: provider interface, one cloud provider, persistent conversations and streamed responses. **Not approved and not started.** Stop here until the owner reviews, manually commits and explicitly approves Phase 2.
+No remaining Phase 2 implementation tasks. Owner review/manual commit and optional credentialed live validation remain pending. **Stop here. Phase 3 — Persistent Memory is planned but not approved.** Do not implement memory, embeddings, retrieval or summarization until explicit owner approval.
+
+## Approved follow-up: host database access
+
+The owner requested database access outside Docker after Phase 2. Added the optional `infrastructure/compose.database-access.yaml` override, a localhost-only `127.0.0.1:${DB_FORWARD_PORT:-5432}:5432` mapping and a dedicated host-access bridge. The bridge is needed because Docker did not publish a port for the internal-only network. The default Compose file remains private. Existing database data and internal connection settings are preserved; Phase 3 remains unapproved.
+
+Changed files: `infrastructure/compose.database-access.yaml` (added), `.env.example`, `README.md`, `docs/architecture.md`, and this progress document. Documentation covers startup with both files, client credentials, alternate host port and remote port forwarding.
+
+Validation: combined Compose `config --quiet` passed; `up -d postgres` recreated only PostgreSQL using its existing volume. An authenticated `psql` client on the Docker host network connected through `127.0.0.1:5432` and returned database/user `coding_assistant`. Temporary credentials used by the test were removed without printing them. Local HTTP health was checked afterward. No application code changed, so application suites were not rerun.
+
+Suggested follow-up commit:
+
+```text
+chore(docker): add optional localhost PostgreSQL access
+
+- Add a host-access Compose override with a configurable loopback port
+- Document database client setup and preserve private default networking
+```
+
+No files staged, committed or pushed.

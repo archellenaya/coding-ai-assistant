@@ -2,6 +2,10 @@
 import http.cookiejar
 import json
 import secrets
+import subprocess
+import sys
+import uuid
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,6 +31,7 @@ class Browser:
         except urllib.error.HTTPError as error:
             response = error
         body = response.read()
+        self.last_body = body
         assert response.status == expected, f'{method} {path}: expected {expected}, got {response.status}'
         return json.loads(body) if body and body.startswith(b'{') else None
 
@@ -50,6 +55,24 @@ assert project['cloud_processing_allowed'] is False
 project_id = project['id']
 assert browser.request('/api/v1/projects')['data'][0]['id'] == project_id
 assert browser.request('/api/v1/projects/' + project_id)['data']['name'] == 'Smoke project'
+
+conversation = browser.request(f'/api/v1/projects/{project_id}/conversations', 'POST', {'title': 'HTTP smoke fixture'}, expected=201)['data']
+conversation_id = conversation['id']
+conversation_url = f'/api/v1/conversations/{conversation_id}'
+assert len(browser.request(f'/api/v1/projects/{project_id}/conversations?search=')['data']) == 1
+browser.request(conversation_url + '/messages', 'POST', {'content': 'Do not send this fixture upstream', 'model': 'unconfigured-' + str(uuid.uuid4()), 'idempotency_key': str(uuid.uuid4())}, expected=403)
+assert browser.request(conversation_url + '/messages')['data'] == []
+browser.request('/api/v1/models')
+if '--chat-fixture' in sys.argv:
+    fixture = Path(__file__).with_name('fixtures').joinpath('chat-stream.php').read_text().removeprefix('<?php')
+    result = subprocess.run(['docker', 'compose', '--env-file', '.env', '-f', 'infrastructure/compose.yaml', 'exec', '-T', 'api', 'php', '-r', fixture, conversation_id], check=True, capture_output=True, text=True)
+    saved = json.loads(result.stdout)
+    browser.request(conversation_url + '/messages/' + saved['message_id'] + '/stream?after=' + str(saved['first_event_id']))
+    stream = browser.last_body.decode()
+    assert 'event: delta' in stream and 'event: completed' in stream and 'event: end' in stream
+    assert 'event: reset' not in stream
+    assert 'HTTP fixture' in stream
+
 assert browser.request('/api/v1/projects/' + project_id, 'PATCH', {'archived': True})['data']['archived_at']
 assert browser.request('/api/v1/projects/' + project_id, 'PATCH', {'name': 'Updated', 'archived': False})['data']['archived_at'] is None
 other = Browser()
@@ -57,7 +80,11 @@ other.request('/sanctum/csrf-cookie', expected=204)
 other.request('/api/v1/register', 'POST', {**registration, 'email': f'other-{email}'}, expected=201)
 assert other.request('/api/v1/projects')['data'] == []
 other.request('/api/v1/projects/' + project_id, expected=403)
+other.request(conversation_url, expected=403)
+other.request(conversation_url + '/messages', expected=403)
 other.request('/api/v1/projects/' + project_id, 'DELETE', expected=403)
+browser.request(conversation_url, 'PATCH', {'title': 'Renamed smoke conversation'})
+browser.request(conversation_url, 'DELETE', expected=204)
 browser.request('/api/v1/projects/' + project_id, 'DELETE', expected=204)
 browser.request('/api/v1/projects/' + project_id, expected=404)
 browser.request('/api/v1/logout', 'POST', expected=204)
@@ -67,4 +94,4 @@ browser.request('/api/v1/login', 'POST', {'email': email, 'password': 'incorrect
 browser.request('/api/v1/login', 'POST', {'email': email, 'password': password})
 assert browser.request('/api/v1/user')['data']['id'] == user['id']
 browser.request('/api/v1/logout', 'POST', expected=204)
-print('PASS: HTTP health, SPA, CSRF rejection, registration, session auth, project CRUD/archive, tenant isolation, logout/login')
+print('PASS: HTTP health, SPA, CSRF, auth, project/conversation CRUD, empty search, cloud denial, tenant isolation, logout/login' + (', persisted SSE replay through Nginx (test fixture only)' if '--chat-fixture' in sys.argv else ''))
