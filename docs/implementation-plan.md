@@ -5,10 +5,10 @@ The master specification governs scope. Approvals apply to one phase only.
 | Phase | Deliverable | Approval |
 |---|---|---|
 | 1 Foundation | Monorepo, Laravel, React, PostgreSQL/pgvector, Redis, Docker, authentication and project management; tests and setup docs | Completed; committed by owner |
-| 2 AI Chat | Provider interface, one cloud provider, persistent conversations, SSE, retries/idempotency | Explicitly approved by owner; completed, awaiting review |
-| 3 Persistent Memory | Provenance-aware memories, embeddings, hybrid search, summarization, correction/invalidation | Not approved |
+| 2 AI Chat | Provider interface, one cloud provider, persistent conversations, SSE, retries/idempotency | Completed; manually committed by owner |
+| 3 Persistent Memory | Provenance-aware memories, embeddings, hybrid search, summarization, correction/invalidation | Completed; awaiting owner review |
 | 4 Repository Intelligence | Read-only repository registration, safe discovery, parsing, incremental indexing and scoped source retrieval | Not approved |
-| 5 Token Optimization | ContextBuilder, configurable model routing/fallback, verified cache, Ollama, usage and budgets | Not approved |
+| 5 Token Optimization | ContextBuilder, verified cache, Ollama/OpenAI/Auto provider selection with per-conversation preferences/status, permitted routing/fallback, usage/costs and budgets (§20) | Not approved |
 | 6 Error Learning | Error/debugging history, isolated approved verification, evidence and reusable solutions | Not approved |
 | 7 VS Code | SecretStorage authentication, project detection, chat, explanation/error analysis, solution retrieval and diff proposals | Not approved |
 | 8 Production Hardening | Isolation/security evaluation, monitoring, backups, CI/CD, deployment and performance evidence | Not approved |
@@ -36,4 +36,14 @@ Organization invitations, repository association/detection, AI settings beyond c
 - React model selection, conversation navigation, streaming, reconnect, syntax highlighting and safe text rendering.
 - API/provider/queue/stream tests and React interaction tests; PostgreSQL, Docker and HTTP validation.
 
-Stop after Phase 2. Phase 3 — Persistent Memory requires explicit owner approval. Summaries, embeddings, RAG, multi-provider routing, adaptive token budgeting and usage ledgers remain future phases.
+## Phase 3 acceptance
+
+- Private project-scoped records for conversation, project, error and solution memory, with controlled provenance, revisions and unverified status.
+- Automatic idempotent completed-turn capture, local CPU embeddings, real PostgreSQL pgvector cosine search plus full-text search, source-aware deduplication and isolation.
+- Correction, invalidation, deletion, explicit reindexing/backfill and stale-job recovery without resurrecting invalidated data.
+- Explicit cloud-authorized conversation snapshots/summaries, bounded paid retries and source provenance.
+- Relevant past-conversation memory included as untrusted data in chat with saved source identifiers; whole-record selection with existing input limits.
+- Private authenticated FastAPI intelligence service, offline runtime model, pinned Python dependencies, metadata/fingerprint generation guards, Docker startup and tests.
+- Memory Explorer and summary controls with clear verification/error states.
+
+Stop after Phase 3. Phase 4 — Repository Intelligence requires explicit owner approval. Repository access/parsing/indexing, multi-provider routing, adaptive token budgeting and usage ledgers remain future phases.

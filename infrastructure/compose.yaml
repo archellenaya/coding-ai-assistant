@@ -24,6 +24,31 @@ services:
     <<: *api
     networks: [backend, egress]
     command: [php, artisan, queue:work, database, --queue=chat, --tries=1, --timeout=150]
+  memory-worker:
+    <<: *api
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      intelligence: {condition: service_healthy}
+    command: [php, artisan, queue:work, database, --queue=memory, --tries=1, --timeout=150]
+  summary-worker:
+    <<: *api
+    networks: [backend, egress]
+    command: [php, artisan, queue:work, database, --queue=summary, --tries=1, --timeout=150]
+  intelligence:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/intelligence.Dockerfile
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+        EMBEDDING_REVISION: ${EMBEDDING_REVISION:-aa8f8b060edb00e03bfdd08813a2949946c8ba55}
+    environment:
+      INTELLIGENCE_TOKEN: ${INTELLIGENCE_TOKEN:?Set INTELLIGENCE_TOKEN in .env}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      EMBEDDING_REVISION: ${EMBEDDING_REVISION:-aa8f8b060edb00e03bfdd08813a2949946c8ba55}
+      EMBEDDING_VERSION: ${EMBEDDING_VERSION:-bge-small-en-v1.5-local-v1}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
+    networks: [backend]
   scheduler:
     <<: *api
     command: [php, artisan, schedule:work]

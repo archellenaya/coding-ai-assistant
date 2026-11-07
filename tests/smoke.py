@@ -5,6 +5,7 @@ import secrets
 import subprocess
 import sys
 import uuid
+import time
 from pathlib import Path
 import urllib.error
 import urllib.parse
@@ -63,6 +64,29 @@ assert len(browser.request(f'/api/v1/projects/{project_id}/conversations?search=
 browser.request(conversation_url + '/messages', 'POST', {'content': 'Do not send this fixture upstream', 'model': 'unconfigured-' + str(uuid.uuid4()), 'idempotency_key': str(uuid.uuid4())}, expected=403)
 assert browser.request(conversation_url + '/messages')['data'] == []
 browser.request('/api/v1/models')
+if '--memory' in sys.argv:
+    memory = browser.request(f'/api/v1/projects/{project_id}/memories', 'POST', {'category': 'project', 'content': 'Fix authentication failures by refreshing expired access credentials before retrying requests.'}, expected=201)['data']
+    memory_id = memory['id']
+    assert memory['verification_status'] == 'unverified'
+    deadline = time.monotonic() + 45
+    while True:
+        indexed = browser.request('/api/v1/memories/' + memory_id)
+        if indexed['data']['index_status'] == 'ready':
+            break
+        assert indexed['data']['index_status'] != 'failed', 'Local embedding job failed'
+        assert time.monotonic() < deadline, 'Local embedding job timed out'
+        time.sleep(1)
+    assert indexed['embedding']['dimensions'] == 384
+    result = browser.request(f'/api/v1/projects/{project_id}/memories/search', 'POST', {'query': 'How can I resolve an expired authentication token?'})
+    assert result['retrieval']['mode'] == 'hybrid' and result['retrieval']['degraded'] is False
+    assert result['data'][0]['memory']['id'] == memory_id
+    corrected = browser.request('/api/v1/memories/' + memory_id, 'PATCH', {'content': 'Correction: refreshed credentials remain an unverified suggestion.', 'revision': 1})['data']
+    assert corrected['revision'] == 2
+    browser.request('/api/v1/memories/' + memory_id + '/invalidate', 'POST')
+    assert browser.request(f'/api/v1/projects/{project_id}/memories/search', 'POST', {'query': 'credentials'})['data'] == []
+    assert browser.request(conversation_url + '/summary')['data'] is None
+    browser.request(conversation_url + '/summary', 'POST', expected=403)
+
 if '--chat-fixture' in sys.argv:
     fixture = Path(__file__).with_name('fixtures').joinpath('chat-stream.php').read_text().removeprefix('<?php')
     result = subprocess.run(['docker', 'compose', '--env-file', '.env', '-f', 'infrastructure/compose.yaml', 'exec', '-T', 'api', 'php', '-r', fixture, conversation_id], check=True, capture_output=True, text=True)
@@ -82,6 +106,9 @@ assert other.request('/api/v1/projects')['data'] == []
 other.request('/api/v1/projects/' + project_id, expected=403)
 other.request(conversation_url, expected=403)
 other.request(conversation_url + '/messages', expected=403)
+if '--memory' in sys.argv:
+    other.request('/api/v1/memories/' + memory_id, expected=403)
+    browser.request('/api/v1/memories/' + memory_id, 'DELETE', expected=204)
 other.request('/api/v1/projects/' + project_id, 'DELETE', expected=403)
 browser.request(conversation_url, 'PATCH', {'title': 'Renamed smoke conversation'})
 browser.request(conversation_url, 'DELETE', expected=204)
@@ -94,4 +121,4 @@ browser.request('/api/v1/login', 'POST', {'email': email, 'password': 'incorrect
 browser.request('/api/v1/login', 'POST', {'email': email, 'password': password})
 assert browser.request('/api/v1/user')['data']['id'] == user['id']
 browser.request('/api/v1/logout', 'POST', expected=204)
-print('PASS: HTTP health, SPA, CSRF, auth, project/conversation CRUD, empty search, cloud denial, tenant isolation, logout/login' + (', persisted SSE replay through Nginx (test fixture only)' if '--chat-fixture' in sys.argv else ''))
+print('PASS: HTTP health, SPA, CSRF, auth, project/conversation CRUD, empty search, cloud denial, tenant isolation, logout/login' + (', persisted SSE replay through Nginx (test fixture only)' if '--chat-fixture' in sys.argv else '') + (', real offline embeddings, pgvector hybrid retrieval, correction/invalidation, private memory access and summary cloud denial' if '--memory' in sys.argv else ''))

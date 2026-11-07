@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Coding AI Assistant \u2014 Phases 1\u20132",
-    "version": "2.0.0",
-    "description": "Same-origin Sanctum cookie sessions with CSRF for mutations. Private project-scoped conversations, durable queued inference and resumable SSE. Configure model and credentials on server; cloud processing defaults to disabled."
+    "title": "Coding AI Assistant \u2014 Phases 1\u20133",
+    "version": "3.0.0",
+    "description": "Same-origin Sanctum cookie sessions with CSRF for mutations. Private project-scoped conversations, durable queued inference and resumable SSE. Configure model and credentials on server; cloud processing defaults to disabled. Private persistent memory, local CPU embeddings, hybrid retrieval and explicit unverified conversation summaries."
   },
   "servers": [
     {
@@ -1437,6 +1437,817 @@
           }
         ]
       }
+    },
+    "/api/v1/projects/{project}/memories": {
+      "get": {
+        "summary": "List own project memories",
+        "description": "20 per page. Local indexing requires no cloud permission. Conversation-derived memories remain private to their creator.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Memory"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create an unverified manual memory",
+        "description": "Server controls source, owner and verification. Same manual category/content deduplicates. Indexing is queued atomically.",
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Memory"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "category",
+                  "content"
+                ],
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "conversation",
+                      "project",
+                      "error",
+                      "solution"
+                    ]
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 12000
+                  },
+                  "git_commit": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{7,64}$"
+                  },
+                  "error_signature": {
+                    "type": "string",
+                    "maxLength": 180
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project}/memories/search": {
+      "post": {
+        "summary": "Hybrid semantic and full-text private memory search",
+        "description": "Scopes project/owner/active state before search. Vector matches also require the current compatible profile/revision. Errors explicitly fall back to lexical retrieval. Up to 5 deduplicated records with source metadata; all unverified.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "memory": {
+                            "$ref": "#/components/schemas/Memory"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "retrieval": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "empty",
+                            "lexical",
+                            "hybrid"
+                          ]
+                        },
+                        "degraded": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memories/{memory}": {
+      "get": {
+        "summary": "Inspect memory and embedding provenance",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Memory"
+                    },
+                    "embedding": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/EmbeddingMetadata"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Correct content with optimistic revision check",
+        "description": "Removes the old embedding and queues a new revision if active. Invalidated memories stay invalidated. Updates correction provenance; source links remain unchanged.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Memory"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "content",
+                  "revision"
+                ],
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 12000
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Permanently delete memory and embedding",
+        "description": "",
+        "responses": {
+          "204": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/memories/{memory}/invalidate": {
+      "post": {
+        "summary": "Exclude memory and cancel stale index results",
+        "description": "Idempotent invalidation removes the embedding and increments revision. No automatic resurrection.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Memory"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/memories/{memory}/reindex": {
+      "post": {
+        "summary": "Queue the current embedding generation",
+        "description": "Only active memories. Pending/indexing work is not duplicated. Previous generation vectors are not compared with the new profile.",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Memory"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/conversations/{conversation}/summary": {
+      "get": {
+        "summary": "Latest private conversation summary snapshot",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ConversationSummary"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Explicitly queue or retry an unverified summary snapshot",
+        "description": "Requires creator ownership, current project membership, cloud permission and a configured model. Source is completed turns only. Same snapshot deduplicates. For retry=true, summary_id and failed attempt are required; repeated older attempts do not buy another inference. Maximum 3 attempts. Oversized source/output fails without truncation. Ready snapshots become unverified local-indexed memories.",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConversationSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current project membership and creator ownership required; cloud permission required for summaries"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Revision conflict, invalidated memory, busy conversation, invalid retry state or archived project"
+          },
+          "422": {
+            "description": "Input/source/model/retry limit validation failed"
+          },
+          "429": {
+            "description": "Rate limited; search 20/minute/user, summaries 3/minute/user"
+          },
+          "503": {
+            "description": "Cloud model/key not configured for requested summary"
+          },
+          "419": {
+            "description": "CSRF session/token required"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-XSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "retry": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "summary_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "attempt": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "retry": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "retry"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "summary_id",
+                        "attempt"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1707,6 +2518,30 @@
                 "type": "integer"
               }
             }
+          },
+          "memory_sources": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "source_kind": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -1746,6 +2581,198 @@
             "type": [
               "string",
               "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "Memory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "conversation",
+              "project",
+              "error",
+              "solution"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "content_hash": {
+            "type": "string"
+          },
+          "verification_status": {
+            "type": "string",
+            "enum": [
+              "unverified"
+            ]
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "conversation",
+              "summary"
+            ]
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "invalidated"
+            ]
+          },
+          "index_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "indexing",
+              "ready",
+              "failed",
+              "none"
+            ]
+          },
+          "index_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversation_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "source_message_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "summary_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "git_commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EmbeddingMetadata": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "model_version": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "integer"
+          },
+          "artifact_fingerprint": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "pooling": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConversationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "through_sequence": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
               "null"
             ]
           }

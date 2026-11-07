@@ -1,6 +1,6 @@
 # Coding AI Assistant
 
-Phases 1–2: a Laravel API and React TypeScript workspace with authenticated project management and private, streaming AI chat. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
+Phases 1–3: a Laravel API and React TypeScript workspace with authenticated project management private streaming AI chat, and persistent project memory. Start with [architecture](docs/architecture.md), [plan](docs/implementation-plan.md), [progress](docs/progress.md) and the [master specification](docs/master-specification.md).
 
 ## Docker startup
 
@@ -11,7 +11,7 @@ cp .env.example .env
 php -r 'echo "base64:".base64_encode(random_bytes(32)).PHP_EOL;'
 ```
 
-Put the generated value in `.env` as `APP_KEY`. Set a unique strong `DB_PASSWORD`; never commit `.env`. If PHP is unavailable, generate the key with `docker run --rm php:8.3.30-cli php -r 'echo "base64:".base64_encode(random_bytes(32)).PHP_EOL;'`.
+For a first installation, put the generated value in `.env` as `APP_KEY`. Set a unique strong `DB_PASSWORD` and a random `INTELLIGENCE_TOKEN` (for example, generate one with `python3 -c 'import secrets; print(secrets.token_hex(32))'`). Preserve an existing `.env` and its credentials when upgrading; never commit it. If PHP is unavailable, generate the key with `docker run --rm php:8.3.30-cli php -r 'echo "base64:".base64_encode(random_bytes(32)).PHP_EOL;'`.
 
 ```sh
 docker compose --env-file .env -f infrastructure/compose.yaml build
@@ -64,9 +64,9 @@ For container feature tests run `docker compose --env-file .env -f infrastructur
 
 ## API
 
-See [OpenAPI](docs/openapi.yaml). `/api/v1` provides registration, login/logout/current user, organization listing and project CRUD. `PATCH /projects/{id}` accepts `archived` to archive/restore. Lists paginate at 20 projects. Mutations require the XSRF header from `/sanctum/csrf-cookie`. Use an allowed Origin or Referer. Errors use JSON `message` and optional field-level `errors`. Conversation and model endpoints are implemented; repository, memory and extension endpoints remain future phases.
+See [OpenAPI](docs/openapi.yaml). `/api/v1` provides registration, login/logout/current user, organization listing and project CRUD. `PATCH /projects/{id}` accepts `archived` to archive/restore. Lists paginate at 20 projects. Mutations require the XSRF header from `/sanctum/csrf-cookie`. Use an allowed Origin or Referer. Errors use JSON `message` and optional field-level `errors`. Conversation, model, memory and summary endpoints are implemented; repository and extension endpoints remain future phases.
 
-No files are staged or committed automatically. Phase 2 is approved; Phase 3 requires explicit owner approval.
+No files are staged or committed automatically. Phase 3 is approved; Phase 4 requires explicit owner approval.
 
 Runtime smoke check: `python3 tests/smoke.py` after Compose startup. It creates two disposable test accounts and deletes its test project. Use only against this local development stack.
 
@@ -114,3 +114,46 @@ docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/
 In DBeaver, pgAdmin or another PostgreSQL client, connect to `127.0.0.1:5432`, database `coding_assistant`, user `coding_assistant`, with `DB_PASSWORD` from the root `.env` (or your customized database/user values). If Docker runs on a remote host, forward its port 5432 through your IDE or an SSH tunnel first. This is a PostgreSQL connection, not a browser URL.
 
 Keep both Compose files in subsequent startup commands to retain host access. If port 5432 is occupied, set `DB_FORWARD_PORT=5433` in the root `.env` and use port 5433 in your client. Internal application settings stay `DB_HOST=postgres` and `DB_PORT=5432`. Existing data remains in the named volume.
+
+## Phase 3: persistent memory and local embeddings
+
+The stack now includes a private FastAPI intelligence service and dedicated database workers for memory indexing and cloud summaries. The default embedding model is CPU-only, with a pinned public ONNX snapshot baked into the image. No project text is sent to a cloud embedding API. The intelligence container has no published port or runtime egress. Only chat and summary workers can call the cloud model.
+
+For an existing installation, add a random `INTELLIGENCE_TOKEN` to the root `.env` if missing; this session already generated one locally without changing existing credentials. Laravel and the private service share that token. Configure optional embedding fields using `.env.example`: `EMBEDDING_MODEL`, immutable `EMBEDDING_REVISION`, `EMBEDDING_VERSION`, `EMBEDDING_DIMENSIONS` and `MEMORY_MIN_SIMILARITY`. Defaults select BAAI/bge-small-en-v1.5, 384 dimensions. Never put the token or an OpenAI key in frontend variables.
+
+Upgrade/start with the host-database-access override retained if desired:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml build
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml run --rm api php artisan migrate --force
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml up -d
+python3 tests/check_local_health.py
+```
+
+Open a project's **Memory** page, or `/projects/{project-id}/memories`, to create/search/inspect/correct/invalidate/delete/re-index memories. Memories are private to their creator and current project membership. All four categories are **unverified**, including solution-category entries. Indexing and semantic search work while cloud processing is disabled. Search shows whether results are hybrid or a degraded keyword fallback. Generated answers and summaries are never classified as verified fixes.
+
+New completed chat turns are captured and embedded automatically. To index completed conversations that predate Phase 3, run this explicit local backfill:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml exec api php artisan memory:reindex --capture
+```
+
+Use `--project=<uuid>` to restrict backfill/reindex to one project. Corrections/invalidation cancel stale index results; deleting a source conversation deletes derived memories/embeddings. Invalidated memories are not automatically restored by backfill or reindex. `memory:recover` safely fails indexing/summary work older than five minutes; the scheduler invokes it every minute. The memory worker waits for intelligence health. Explicit re-indexing retries failed local work.
+
+In chat, **Summarize conversation** queues a snapshot of completed turns using your configured cloud model. Cloud processing must be enabled and model/key configured. It may incur a charge. Repeating a request for the same snapshot reuses it; retry requires the failed summary ID and attempt (handled by the UI), is limited to three attempts, and is never automatic. Source/output beyond bounds fails without truncation. The ready summary becomes an unverified, locally embedded memory. Later conversations retrieve relevant private memories as untrusted data and show source links. Current-conversation records are excluded to avoid duplicating history; this is retrieval, not training or fine-tuning.
+
+To change embedding models, set the matching supported model, immutable snapshot revision, version and dimensions; rebuild/recreate intelligence and Laravel services, then run `memory:reindex`. Fingerprint/profile matching excludes incompatible old vectors during rebuild; keyword retrieval remains available. Never just change dimension metadata on existing vectors. See [architecture](docs/architecture.md) and [ADR 0003](docs/decisions/0003-private-memory.md) for tradeoffs. Default mean-pooled embeddings and the English-focused model have relevance limitations; repository-aware chunking and advanced token optimization remain later phases.
+
+Full local transport/retrieval smoke check, with no paid inference:
+
+```sh
+python3 tests/smoke.py --chat-fixture --memory
+```
+
+This creates disposable smoke accounts and a project, tests real local embeddings/pgvector search and memory lifecycle/privacy, then deletes the project/memories. Summary generation is mocked in automated API tests; the smoke test checks its cloud-permission denial. Run the intelligence tests (including a real offline CPU quality fixture) with:
+
+```sh
+docker compose --env-file .env -f infrastructure/compose.yaml -f infrastructure/compose.database-access.yaml run --rm --no-deps -e RUN_REAL_EMBEDDINGS=1 intelligence python -m pytest -q -p no:cacheprovider
+```
+
+The normal API and React test commands remain unchanged. Phase 2 evidence is archived in [docs/history/phase-2.md](docs/history/phase-2.md). Phase 4 is not authorized.

@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Services\AI\ProviderException;
 use App\Services\Chat\ChatAccess;
 use App\Services\Chat\ChatService;
+use App\Services\Memory\MemoryContext;
+use App\Services\Memory\MemoryService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +44,12 @@ class GenerateChatResponse implements ShouldQueue
             if (array_sum(array_map(fn ($m) => mb_strlen($m['content']), $input)) > config('chat.max_input_chars')) {
                 throw new ProviderException('input_limit');
             }
+            $owner = User::findOrFail($conversation->user_id);
+            $used = array_sum(array_map(fn ($m) => mb_strlen($m['content']), $input));
+            $memory = app(MemoryContext::class)->build($conversation, $owner, end($input)['content'], config('chat.max_input_chars') - $used);
+            array_splice($input, count($input) - 1, 0, $memory['messages']);
+            $message->update(['memory_sources' => $memory['sources']]);
+            $access->assertCanSend($conversation->fresh(), $owner);
             $completed = false;
             foreach ($provider->stream($input, $message->model, config('chat.max_output_tokens')) as $event) {
                 if ($event->type === 'delta') {
@@ -78,6 +86,9 @@ class GenerateChatResponse implements ShouldQueue
                 return null;
             }
             $update($message);
+            if ($type === 'completed') {
+                app(MemoryService::class)->capture($message);
+            }
             MessageEvent::create(['message_id' => $message->id, 'attempt' => $message->attempt, 'type' => $type, 'payload' => $payload]);
 
             return $message;

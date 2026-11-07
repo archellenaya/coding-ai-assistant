@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 import { MessageContent } from "./MessageContent";
+import { SummaryPanel } from "./SummaryPanel";
 
 type Conversation = { id: string; title: string };
 type Message = {
@@ -14,6 +15,7 @@ type Message = {
   model: string | null;
   attempt: number;
   error_code: string | null;
+  memory_sources?: { id: string; revision: number }[];
   usage: { input_tokens?: number; output_tokens?: number } | null;
 };
 type Page<T> = { data: T[]; last_page: number };
@@ -67,6 +69,7 @@ function ProjectChat({ projectId }: { projectId: string }) {
   return (
     <>
       <Link to="/projects">← Projects</Link>
+      <Link to={`/projects/${projectId}/memories`}>Memory Explorer</Link>
       <h1>AI Chat · {project.data?.data.name ?? "Project"}</h1>
       <p>
         Conversations are private to your account. Responses are AI suggestions
@@ -337,6 +340,7 @@ function ConversationChat({
       {active && (
         <button onClick={() => setReconnect((n) => n + 1)}>Reconnect</button>
       )}
+      <SummaryPanel conversationId={id} disabled={!canSend || !!active} />
       <div aria-label="Messages" aria-live="polite" className="my-5">
         {messages.isPending && <p>Loading messages…</p>}
         {messages.data?.data.map((message) => (
@@ -352,6 +356,20 @@ function ConversationChat({
                 {message.model} · {message.status} · Attempt {message.attempt}
                 {message.usage &&
                   ` · ${message.usage.input_tokens ?? "?"} input / ${message.usage.output_tokens ?? "?"} output tokens`}
+              </p>
+            )}
+            {message.memory_sources && message.memory_sources.length > 0 && (
+              <p>
+                Memory sources:{" "}
+                {message.memory_sources.map((source) => (
+                  <Link
+                    className="mr-3 underline"
+                    key={source.id}
+                    to={`/projects/${project.id}/memories?memory=${source.id}`}
+                  >
+                    {source.id.slice(0, 8)} · revision {source.revision}
+                  </Link>
+                ))}
               </p>
             )}
             {message.status === "failed" && (

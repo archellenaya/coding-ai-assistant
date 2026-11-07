@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\MemoryController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SummaryController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:api')->group(function () {
@@ -15,6 +17,16 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('organizations', [ProjectController::class, 'organizations']);
         Route::apiResource('projects', ProjectController::class);
+        Route::get('projects/{project}/memories', [MemoryController::class, 'index']);
+        Route::post('projects/{project}/memories', [MemoryController::class, 'store']);
+        Route::post('projects/{project}/memories/search', [MemoryController::class, 'search'])->middleware('throttle:memory');
+        Route::get('memories/{memory}', [MemoryController::class, 'show']);
+        Route::patch('memories/{memory}', [MemoryController::class, 'update']);
+        Route::delete('memories/{memory}', [MemoryController::class, 'destroy']);
+        Route::post('memories/{memory}/invalidate', [MemoryController::class, 'invalidate']);
+        Route::post('memories/{memory}/reindex', [MemoryController::class, 'reindex']);
+        Route::get('conversations/{conversation}/summary', [SummaryController::class, 'show']);
+        Route::post('conversations/{conversation}/summary', [SummaryController::class, 'store'])->middleware('throttle:summary');
         Route::get('models', [ConversationController::class, 'models']);
         Route::get('projects/{project}/conversations', [ConversationController::class, 'index']);
         Route::post('projects/{project}/conversations', [ConversationController::class, 'store']);

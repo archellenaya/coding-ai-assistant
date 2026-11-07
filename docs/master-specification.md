@@ -858,6 +858,35 @@ Then implement Phase 1:
 
 ---
 
+# 20. AI Provider Switching Requirements
+
+Implement a configurable AI provider selector in both the React dashboard and VS Code extension.
+
+Support three modes:
+
+1. **Ollama:** Force use of an available local AI model.
+2. **OpenAI:** Force use of a configured OpenAI API model.
+3. **Auto:** Automatically select an appropriate permitted model based on task complexity, privacy, cost, and availability.
+
+Requirements:
+
+- Allow users to select an AI provider and model per conversation.
+- Save the selected preference in the database.
+- Display the active provider and model for each AI response.
+- Show provider connection status and available models.
+- Validate model availability before sending requests.
+- Support streaming responses for both Ollama and OpenAI.
+- Keep conversation history and persistent memories independent of the selected AI provider.
+- Never silently switch providers when the user explicitly selects one.
+- Never route private project data to cloud providers without permission.
+- Handle unavailable providers gracefully and show a clear error.
+- Track token usage and costs separately for each provider.
+- Implement provider selection in Phase 5, while designing the provider interface in Phase 2.
+
+Default to **Auto** mode when multiple providers are configured, but allow a local-only privacy policy to override automatic routing.
+
+---
+
 # FINAL INSTRUCTION
 
 Build this project incrementally as a maintainable, production-oriented Coding AI Assistant.

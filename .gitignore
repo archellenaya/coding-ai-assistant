@@ -10,3 +10,6 @@
 # Python tooling artifacts
 **/__pycache__/
 *.pyc
+
+**/.pytest_cache/
+**/.venv/
